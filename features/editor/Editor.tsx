@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { sampleAnimation } from "./animation";
+import { keyframePose, removeKeyframeAtTime } from "./animationAuthoring";
 import { CharacterPresetPanel } from "./CharacterPresetPanel";
 import { browserEditorEngine } from "./engine";
 import { alignObjects, canArrangeSelection, distributeObjects, type Alignment, type Distribution } from "./layout";
@@ -29,6 +30,7 @@ import {
   updateConstraintTarget,
 } from "./rig";
 import { snapValue } from "./snapping";
+import { TimelinePoseControls } from "./TimelinePoseControls";
 import { TransformOverlay } from "./TransformOverlay";
 import { appendPathAnchor, mirrorPath, movePathAnchor, pathToSvg, togglePathHandles, updatePathHandle } from "./vectorPath";
 
@@ -200,6 +202,26 @@ export function Editor({ initialDocument }: EditorProps) {
     });
   }
 
+  function keyPoseAtCurrentTime(poseId: string) {
+    if (!clipId) return;
+    setDocument((current) => {
+      const pose = (current.poses ?? []).find((candidate) => candidate.id === poseId);
+      if (!pose) return current;
+      return {
+        ...current,
+        animations: current.animations.map((clip) => clip.id === clipId ? keyframePose(clip, pose, currentTime) : clip),
+      };
+    });
+  }
+
+  function removeKeysAtCurrentTime() {
+    if (!clipId) return;
+    setDocument((current) => ({
+      ...current,
+      animations: current.animations.map((clip) => clip.id === clipId ? removeKeyframeAtTime(clip, currentTime) : clip),
+    }));
+  }
+
   function startObjectDrag(event: ReactPointerEvent<SVGElement>, object: EditorObject) {
     event.stopPropagation();
     if (event.shiftKey || event.metaKey || event.ctrlKey) {
@@ -366,6 +388,8 @@ export function Editor({ initialDocument }: EditorProps) {
         </select>
         <output>{currentTime.toFixed(2)}s{selectedClip ? ` / ${selectedClip.duration.toFixed(2)}s` : ""}</output>
       </div>
+      <TimelinePoseControls poses={document.poses ?? []} clipSelected={Boolean(selectedClip)}
+        onKeyPose={keyPoseAtCurrentTime} onRemoveKeysAtTime={removeKeysAtCurrentTime} />
       <input aria-label="Timeline time" type="range" min={0} max={selectedClip?.duration ?? 0} step={0.01}
         disabled={!selectedClip} value={Math.min(currentTime, selectedClip?.duration ?? 0)}
         onChange={(event) => setCurrentTime(Number(event.target.value))} />
