@@ -37,11 +37,11 @@ function boneTransformToSvg(rig: CharacterRig | undefined, boneId: string | unde
 }
 
 function paintAttributes(object: DrawableObject) {
-  const attributes = [`fill=\"${escapeXml(object.fill)}\"`];
-  if (object.stroke !== undefined) attributes.push(`stroke=\"${escapeXml(object.stroke)}\"`);
-  if (object.strokeWidth !== undefined) attributes.push(`stroke-width=\"${formatNumber(object.strokeWidth)}\"`);
-  if (object.strokeLinecap !== undefined) attributes.push(`stroke-linecap=\"${object.strokeLinecap}\"`);
-  if (object.strokeLinejoin !== undefined) attributes.push(`stroke-linejoin=\"${object.strokeLinejoin}\"`);
+  const attributes = [`fill="${escapeXml(object.fill)}"`];
+  if (object.stroke !== undefined) attributes.push(`stroke="${escapeXml(object.stroke)}"`);
+  if (object.strokeWidth !== undefined) attributes.push(`stroke-width="${formatNumber(object.strokeWidth)}"`);
+  if (object.strokeLinecap !== undefined) attributes.push(`stroke-linecap="${object.strokeLinecap}"`);
+  if (object.strokeLinejoin !== undefined) attributes.push(`stroke-linejoin="${object.strokeLinejoin}"`);
   return attributes.join(" ");
 }
 
