@@ -14,6 +14,17 @@ function projectFilename(name: string) {
   return `${stem}.flatstories.json`;
 }
 
+function readFileText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string"
+      ? resolve(reader.result)
+      : reject(new Error("Project file did not contain text."));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read project file."));
+    reader.readAsText(file);
+  });
+}
+
 export function ProjectControls({ document, onLoad }: ProjectControlsProps) {
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +44,7 @@ export function ProjectControls({ document, onLoad }: ProjectControlsProps) {
     event.target.value = "";
     if (!file) return;
     try {
-      const nextDocument = parseProject(await file.text());
+      const nextDocument = parseProject(await readFileText(file));
       onLoad(nextDocument);
       setError(null);
     } catch (loadError) {
