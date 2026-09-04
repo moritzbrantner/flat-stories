@@ -2,15 +2,16 @@
 
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { sampleAnimation } from "./animation";
-import { keyframePose, removeKeyframeAtTime, removeTrackKeyframe, updateTrackKeyframe } from "./animationAuthoring";
+import { keyframePose, keyframeProperty, removeKeyframeAtTime, removeTrackKeyframe, updateTrackKeyframe } from "./animationAuthoring";
 import { CharacterPresetPanel } from "./CharacterPresetPanel";
 import { browserEditorEngine } from "./engine";
 import { KeyframeInspector } from "./KeyframeInspector";
 import { alignObjects, canArrangeSelection, distributeObjects, type Alignment, type Distribution } from "./layout";
-import type { CharacterRig, DrawableObject, EditorDocument, EditorObject, GroupObject, NumberKeyframe, Point, StrokeLinecap, StrokeLinejoin, Transform, VectorPath } from "./model";
+import type { AnimationTrack, CharacterRig, DrawableObject, Easing, EditorDocument, EditorObject, GroupObject, NumberKeyframe, Point, StrokeLinecap, StrokeLinejoin, Transform, VectorPath } from "./model";
 import { createObject, type CreatableObjectKind } from "./objectFactory";
 import { PathEditorOverlay } from "./PathEditorOverlay";
 import { applyCharacterPose, applyExpression, captureCharacterPose, captureExpression, upsertExpression, upsertPose } from "./poses";
+import { PropertyKeyControls } from "./PropertyKeyControls";
 import {
   duplicateSiblingObjects,
   findObject,
@@ -73,6 +74,7 @@ export function Editor({ initialDocument }: EditorProps) {
   const selected = selectedId ? findObject(document.objects, selectedId) : null;
   const selectedClip = document.animations.find((clip) => clip.id === clipId) ?? null;
   const displayDocument = useMemo(() => sampleAnimation(document, clipId, currentTime), [document, clipId, currentTime]);
+  const displaySelected = selectedId ? findObject(displayDocument.objects, selectedId) : null;
   const rootIds = useMemo(() => new Set(document.objects.map((object) => object.id)), [document.objects]);
   const canGroup = selectedIds.length > 1 && selectedIds.every((id) => rootIds.has(id));
   const canUngroup = selectedIds.length === 1 && rootIds.has(selectedIds[0]) && selected?.kind === "group";
@@ -213,6 +215,21 @@ export function Editor({ initialDocument }: EditorProps) {
         animations: current.animations.map((clip) => clip.id === clipId ? keyframePose(clip, pose, currentTime) : clip),
       };
     });
+  }
+
+  function keyPropertyAtCurrentTime(
+    target: AnimationTrack["target"],
+    property: AnimationTrack["property"],
+    value: number,
+    easing: Easing,
+  ) {
+    if (!clipId) return;
+    setDocument((current) => ({
+      ...current,
+      animations: current.animations.map((clip) => clip.id === clipId
+        ? keyframeProperty(clip, target, property, value, currentTime, easing)
+        : clip),
+    }));
   }
 
   function removeKeysAtCurrentTime() {
@@ -407,6 +424,8 @@ export function Editor({ initialDocument }: EditorProps) {
       </div>
       <TimelinePoseControls poses={document.poses ?? []} clipSelected={Boolean(selectedClip)}
         onKeyPose={keyPoseAtCurrentTime} onRemoveKeysAtTime={removeKeysAtCurrentTime} />
+      <PropertyKeyControls selectedNode={displaySelected} rig={displayDocument.rig} clipSelected={Boolean(selectedClip)} currentTime={currentTime}
+        onKey={keyPropertyAtCurrentTime} />
       <KeyframeInspector clip={selectedClip} onUpdate={updateSelectedKeyframe} onDelete={deleteSelectedKeyframe} />
       <input aria-label="Timeline time" type="range" min={0} max={selectedClip?.duration ?? 0} step={0.01}
         disabled={!selectedClip} value={Math.min(currentTime, selectedClip?.duration ?? 0)}
