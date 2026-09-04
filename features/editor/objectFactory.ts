@@ -1,4 +1,4 @@
-import { createIdentityTransform, type DrawableObject, type VectorPath } from "./model";
+import { createIdentityTransform, type DrawableObject, type Transform, type VectorPath } from "./model";
 
 export type CreatableObjectKind = DrawableObject["kind"];
 
@@ -12,6 +12,10 @@ function common(id: string, kind: CreatableObjectKind) {
     visible: true,
     locked: false,
   };
+}
+
+function withPivot(transform: Transform, pivotX: number, pivotY: number): Transform {
+  return { ...transform, pivotX, pivotY };
 }
 
 function trianglePath(id: string): VectorPath {
@@ -28,9 +32,9 @@ function trianglePath(id: string): VectorPath {
 export function createObject(kind: CreatableObjectKind, id: string): DrawableObject {
   const base = common(id, kind);
   switch (kind) {
-    case "rectangle": return { ...base, kind, x: 250, y: 190, width: 160, height: 100, cornerRadius: 18 };
-    case "circle": return { ...base, kind, cx: 400, cy: 260, radius: 70 };
-    case "path": return { ...base, kind, path: trianglePath(id) };
-    case "text": return { ...base, kind, x: 300, y: 260, value: "New text", fontSize: 36 };
+    case "rectangle": return { ...base, transform: withPivot(base.transform, 330, 240), kind, x: 250, y: 190, width: 160, height: 100, cornerRadius: 18 };
+    case "circle": return { ...base, transform: withPivot(base.transform, 400, 260), kind, cx: 400, cy: 260, radius: 70 };
+    case "path": return { ...base, transform: withPivot(base.transform, 400, 255), kind, path: trianglePath(id) };
+    case "text": return { ...base, transform: withPivot(base.transform, 385, 245), kind, x: 300, y: 260, value: "New text", fontSize: 36 };
   }
 }

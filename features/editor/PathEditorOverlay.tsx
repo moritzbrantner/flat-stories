@@ -76,7 +76,7 @@ export function PathEditorOverlay({ path, onMoveAnchor, onMoveHandle, onToggleHa
           onPointerDown={(event) => beginDrag(event, anchor.id, "outHandle")} onPointerMove={moveDrag} onPointerUp={endDrag} />
       </> : null}
       <circle className="path-anchor" cx={anchor.point.x} cy={anchor.point.y} r={7} role="button" tabIndex={0}
-        aria-label={`Path anchor ${anchor.id}`} title="Drag to move; double-click to toggle Bézier handles"
+        aria-label={`Path anchor ${anchor.id}`}
         onPointerDown={(event) => beginDrag(event, anchor.id, "anchor")} onPointerMove={moveDrag} onPointerUp={endDrag}
         onDoubleClick={(event) => { event.stopPropagation(); onToggleHandles(anchor.id); }}
         onKeyDown={(event) => moveAnchorFromKeyboard(event, anchor)} />

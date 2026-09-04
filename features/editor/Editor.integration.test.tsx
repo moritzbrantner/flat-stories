@@ -33,13 +33,15 @@ describe("Editor", () => {
     expect(screen.getByRole("button", { name: /Headline/i })).toBeInTheDocument();
   });
 
-  it("exposes direct vector-path authoring for a selected path", async () => {
+  it("exposes direct vector-path authoring and transform handles for a selected path", async () => {
     const user = userEvent.setup();
     render(<Editor initialDocument={fixtureDocument} />);
     const inspector = within(screen.getByRole("complementary", { name: "Inspector" }));
     await user.click(inspector.getByRole("button", { name: "path Ground" }));
     expect(screen.getByLabelText("Path point count")).toHaveTextContent("5");
     expect(screen.getAllByRole("button", { name: /Path anchor/ })).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "Rotate selection" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resize SE" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add point" }));
     expect(screen.getByLabelText("Path point count")).toHaveTextContent("6");
     expect(screen.getAllByRole("button", { name: /Path anchor/ })).toHaveLength(6);
@@ -50,11 +52,17 @@ describe("Editor", () => {
     expect(screen.getByRole("button", { name: "Snap 10" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("exposes the rig and animation vertical slice", () => {
+  it("makes animation preview read-only and returns to editing in rest pose", async () => {
+    const user = userEvent.setup();
     render(<Editor initialDocument={fixtureDocument} />);
-    expect(screen.getByRole("slider", { name: "Timeline time" })).toBeEnabled();
-    expect(screen.getByRole("combobox", { name: "Animation clip" })).toHaveValue("hello");
-    expect(screen.getAllByRole("button", { name: "Solve IK" })).toHaveLength(2);
+    const clip = screen.getByRole("combobox", { name: "Animation clip" });
+    expect(clip).toHaveValue("");
+    await user.selectOptions(clip, "hello");
     expect(screen.getByText(/bone:head/)).toBeInTheDocument();
+    expect(screen.getByText(/Animation preview is read-only/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rectangle" })).toBeDisabled();
+    await user.selectOptions(clip, "");
+    expect(screen.queryByText(/Animation preview is read-only/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rectangle" })).toBeEnabled();
   });
 });

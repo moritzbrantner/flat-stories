@@ -31,8 +31,8 @@ Rust/WASM is still workload-driven. Do not move the React state tree, DOM render
 
 ## Roadmap
 
-1. **Character-ready scene graph** — hierarchical nodes, transforms, grouping, multi-selection, direct manipulation, character fixture. **In progress.**
-2. **Vector drawing** — Bézier/node editing, move/resize/rotate handles, snapping, alignment/distribution, robust strokes and path booleans.
+1. **Character-ready scene graph** — hierarchical nodes, transforms, grouping, multi-selection, direct manipulation, character fixture. **Complete.**
+2. **Vector drawing** — editor-native Bézier anchors/handles, exact curve bounds, on-canvas node editing, grid snapping, resize/rotate handles and keyboard precision controls are underway; alignment/distribution, layer reorder, duplication and mature path operations remain.
 3. **Skeleton and rigging** — bone editing, attachment workflow, pivots, joint limits, FK and two-bone IK. The data model and solver are present; authoring UX comes next.
 4. **Poses and expressions** — named reusable character poses and facial-expression states.
 5. **Animation timeline** — editable tracks/keyframes, easing curves, playback, onion skinning, copy/paste and loop regions. The typed clip model and scrub preview are present.
@@ -41,6 +41,10 @@ Rust/WASM is still workload-driven. Do not move the React state tree, DOM render
 8. **Dogfood a complete original mascot** — build and animate a production-scale character entirely in Flat Stories and turn friction into focused follow-ups.
 9. **Advanced deformation only when justified** — path morphing, two-dimensional deformation, mesh skinning, motion paths, richer IK and secondary motion.
 
+## Editing versus preview
+
+The rest pose is the authored editing state. Selecting an animation clip switches the canvas into a read-only sampled preview so direct geometry edits cannot accidentally bake sampled animation values back into the source document. Return to `Rest pose` before changing artwork, transforms, paths, or rig constraints.
+
 ## Current verification focus
 
-Pure scene-graph, animation, and rig math are deterministic and covered independently from React. The browser integration tests cover the hierarchical layers surface, object creation/editing, rig controls, and animation timeline entry points.
+Pure scene-graph, vector-path, geometry, snapping, animation, and rig math are deterministic and covered independently from React. Browser integration tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, animation-preview isolation, rig controls, and timeline entry points.
