@@ -18,7 +18,9 @@ describe("playback", () => {
   });
 
   it("wraps looping clips without marking playback finished", () => {
-    expect(advancePlaybackTime(clip({ loop: true }), 1.8, 0.5)).toEqual({ time: 0.2999999999999998, finished: false });
+    const advanced = advancePlaybackTime(clip({ loop: true }), 1.8, 0.5);
+    expect(advanced.time).toBeCloseTo(0.3);
+    expect(advanced.finished).toBe(false);
   });
 
   it("ignores negative time deltas and handles empty clips", () => {
