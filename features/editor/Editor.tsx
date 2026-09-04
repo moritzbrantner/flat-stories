@@ -3,17 +3,21 @@
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { sampleAnimation } from "./animation";
 import { browserEditorEngine } from "./engine";
-import type { CharacterRig, DrawableObject, EditorDocument, EditorObject, GroupObject, Point, Transform, VectorPath } from "./model";
+import { alignObjects, canArrangeSelection, distributeObjects, type Alignment, type Distribution } from "./layout";
+import type { CharacterRig, DrawableObject, EditorDocument, EditorObject, GroupObject, Point, StrokeLinecap, StrokeLinejoin, Transform, VectorPath } from "./model";
 import { createObject, type CreatableObjectKind } from "./objectFactory";
 import { PathEditorOverlay } from "./PathEditorOverlay";
 import {
+  duplicateSiblingObjects,
   findObject,
   flattenObjects,
   groupRootObjects,
   objectTransformToSvg,
   patchObject,
   patchObjectTransform,
+  reorderObject,
   ungroupRootObject,
+  type LayerDirection,
 } from "./sceneGraph";
 import {
   boneWorldTransformToSvg,
@@ -68,6 +72,7 @@ export function Editor({ initialDocument }: EditorProps) {
   const canGroup = selectedIds.length > 1 && selectedIds.every((id) => rootIds.has(id));
   const canUngroup = selectedIds.length === 1 && rootIds.has(selectedIds[0]) && selected?.kind === "group";
   const editingEnabled = clipId === null;
+  const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);
 
   function nextId(prefix: string) {
     let id: string;
@@ -137,6 +142,29 @@ export function Editor({ initialDocument }: EditorProps) {
     setSelectedIds(childIds);
   }
 
+  function duplicateSelection() {
+    if (!editingEnabled || selectedIds.length === 0) return;
+    const result = duplicateSiblingObjects(document, selectedIds, (kind) => nextId(kind));
+    if (result.duplicatedIds.length === 0) return;
+    setDocument(result.document);
+    setSelectedIds(result.duplicatedIds);
+  }
+
+  function reorderSelection(direction: LayerDirection) {
+    if (!editingEnabled || !selectedId || selectedIds.length !== 1) return;
+    setDocument((current) => reorderObject(current, selectedId, direction));
+  }
+
+  function alignSelection(alignment: Alignment) {
+    if (!canArrange) return;
+    setDocument((current) => alignObjects(current, selectedIds, alignment));
+  }
+
+  function distributeSelection(distribution: Distribution) {
+    if (!canArrange || selectedIds.length < 3) return;
+    setDocument((current) => distributeObjects(current, selectedIds, distribution));
+  }
+
   function updateRig(update: (rig: CharacterRig) => CharacterRig) {
     if (!editingEnabled) return;
     setDocument((current) => current.rig ? { ...current, rig: update(current.rig) } : current);
@@ -201,6 +229,7 @@ export function Editor({ initialDocument }: EditorProps) {
       <hr />
       <button type="button" disabled={!canGroup || !editingEnabled} onClick={groupSelection}><span aria-hidden>G</span>Group</button>
       <button type="button" disabled={!canUngroup || !editingEnabled} onClick={ungroupSelection}><span aria-hidden>U</span>Ungroup</button>
+      <button type="button" disabled={!editingEnabled || selectedIds.length === 0} onClick={duplicateSelection}><span aria-hidden>D</span>Duplicate</button>
     </aside>
 
     <section className="canvas-region" aria-label="Canvas workspace"
@@ -251,6 +280,26 @@ export function Editor({ initialDocument }: EditorProps) {
           onPathAddPoint={() => addPathPoint(selected.id)}
           onPathToggleClosed={() => updatePath(selected.id, (path) => ({ ...path, closed: !path.closed }))}
           onPathMirror={(axis) => updatePath(selected.id, (path) => mirrorPath(path, axis))} /> : <p>Select an object.</p>}
+      </section>
+      <section>
+        <h2>Arrange</h2>
+        <div className="arrange-actions">
+          <button type="button" disabled={!editingEnabled || selectedIds.length === 0} onClick={duplicateSelection}>Duplicate</button>
+          <button type="button" disabled={!editingEnabled || selectedIds.length !== 1} onClick={() => reorderSelection("backward")}>Backward</button>
+          <button type="button" disabled={!editingEnabled || selectedIds.length !== 1} onClick={() => reorderSelection("forward")}>Forward</button>
+          <button type="button" disabled={!editingEnabled || selectedIds.length !== 1} onClick={() => reorderSelection("back")}>To back</button>
+          <button type="button" disabled={!editingEnabled || selectedIds.length !== 1} onClick={() => reorderSelection("front")}>To front</button>
+        </div>
+        <div className="arrange-actions compact">
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("left")}>Align L</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("center-x")}>Align H</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("right")}>Align R</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("top")}>Align T</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("center-y")}>Align V</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("bottom")}>Align B</button>
+          <button type="button" disabled={!canArrange || selectedIds.length < 3} onClick={() => distributeSelection("horizontal")}>Dist H</button>
+          <button type="button" disabled={!canArrange || selectedIds.length < 3} onClick={() => distributeSelection("vertical")}>Dist V</button>
+        </div>
       </section>
       <section>
         <h2>Layers</h2>
@@ -347,6 +396,8 @@ function DrawableView({ object, selected, interaction }: {
     fill: object.fill,
     stroke: object.stroke,
     strokeWidth: object.strokeWidth,
+    strokeLinecap: object.strokeLinecap,
+    strokeLinejoin: object.strokeLinejoin,
     className: selected ? "selected-object" : undefined,
     ...interaction,
   };
@@ -382,6 +433,9 @@ function Properties({ object, disabled, onChange, onTransformChange, onPathAddPo
     {object.kind !== "group" ? <>
       <label>Fill<input type="color" value={object.fill === "none" ? "#000000" : object.fill} onChange={(event) => onChange({ fill: event.target.value } as Partial<EditorObject>)} /></label>
       <label>Stroke<input value={object.stroke ?? ""} placeholder="none" onChange={(event) => onChange({ stroke: event.target.value || undefined } as Partial<EditorObject>)} /></label>
+      <NumberField label="Stroke W" value={object.strokeWidth ?? 1} min={0} step={0.5} onChange={(value) => onChange({ strokeWidth: value } as Partial<EditorObject>)} />
+      <label>Line cap<select value={object.strokeLinecap ?? "butt"} onChange={(event) => onChange({ strokeLinecap: event.target.value as StrokeLinecap } as Partial<EditorObject>)}><option value="butt">Butt</option><option value="round">Round</option><option value="square">Square</option></select></label>
+      <label>Line join<select value={object.strokeLinejoin ?? "miter"} onChange={(event) => onChange({ strokeLinejoin: event.target.value as StrokeLinejoin } as Partial<EditorObject>)}><option value="miter">Miter</option><option value="round">Round</option><option value="bevel">Bevel</option></select></label>
     </> : null}
     {object.kind === "text" ? <>
       <label>Text<input value={object.value} onChange={(event) => onChange({ value: event.target.value } as Partial<EditorObject>)} /></label>
@@ -418,12 +472,12 @@ function RigPanel({ rig, disabled, onChange }: { rig: CharacterRig; disabled: bo
   return <section>
     <div className="section-heading"><h2>Rig</h2><button type="button" disabled={disabled} onClick={() => onChange(resetRigPose)}>Reset pose</button></div>
     <div className="bone-list">{rig.bones.map((bone) => <span key={bone.id}>{bone.name}<output>{bone.rotation.toFixed(1)}°</output></span>)}</div>
-    <div className="constraints">{rig.constraints.map((constraint) => <article key={constraint.id}>
+    <fieldset className="constraints" disabled={disabled}>{rig.constraints.map((constraint) => <article key={constraint.id}>
       <strong>{constraint.name}</strong>
       <NumberField label="Target X" value={constraint.target.x} onChange={(x) => onChange((current) => updateConstraintTarget(current, constraint.id, { x }))} />
       <NumberField label="Target Y" value={constraint.target.y} onChange={(y) => onChange((current) => updateConstraintTarget(current, constraint.id, { y }))} />
-      <button type="button" disabled={disabled} onClick={() => onChange((current) => solveRigConstraint(current, constraint.id))}>Solve IK</button>
-    </article>)}</div>
+      <button type="button" onClick={() => onChange((current) => solveRigConstraint(current, constraint.id))}>Solve IK</button>
+    </article>)}</fieldset>
   </section>;
 }
 
