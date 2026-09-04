@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { captureCharacterPose } from "./poses";
 import { fixtureDocument } from "./fixture";
-import { keyframePose, removeKeyframeAtTime, upsertNumberKeyframe } from "./animationAuthoring";
+import {
+  keyframePose,
+  removeKeyframeAtTime,
+  removeTrackKeyframe,
+  updateTrackKeyframe,
+  upsertNumberKeyframe,
+} from "./animationAuthoring";
 
 describe("animation authoring", () => {
   it("upserts keyframes deterministically by time", () => {
@@ -37,6 +43,31 @@ describe("animation authoring", () => {
 
     expect(headTracks).toHaveLength(1);
     expect(headTracks[0].keyframes.map((keyframe) => keyframe.time)).toEqual([0, 1]);
+  });
+
+  it("updates and moves one keyframe while preserving deterministic ordering", () => {
+    const clip = fixtureDocument.animations[0];
+    const updated = updateTrackKeyframe(clip, "head-sway", 0.5, { time: 0.75, value: -12, easing: "ease-out" });
+    const track = updated.tracks.find((candidate) => candidate.id === "head-sway")!;
+
+    expect(track.keyframes.map((keyframe) => keyframe.time)).toEqual([0, 0.75, 1, 1.5, 2]);
+    expect(track.keyframes.find((keyframe) => keyframe.time === 0.75)).toEqual({ time: 0.75, value: -12, easing: "ease-out" });
+  });
+
+  it("clamps moved keyframes to the clip range and replaces collisions", () => {
+    const clip = fixtureDocument.animations[0];
+    const updated = updateTrackKeyframe(clip, "head-sway", 0.5, { time: 5, value: 99 });
+    const track = updated.tracks.find((candidate) => candidate.id === "head-sway")!;
+
+    expect(track.keyframes.at(-1)).toMatchObject({ time: 2, value: 99 });
+    expect(track.keyframes.filter((keyframe) => keyframe.time === 2)).toHaveLength(1);
+  });
+
+  it("removes a single keyframe and drops its track when it becomes empty", () => {
+    const clip = { id: "one", name: "One", duration: 1, loop: false, tracks: [
+      { id: "bone:head:rotation", target: { kind: "bone" as const, id: "head" }, property: "rotation" as const, keyframes: [{ time: 0, value: 0 }] },
+    ] };
+    expect(removeTrackKeyframe(clip, "bone:head:rotation", 0).tracks).toEqual([]);
   });
 
   it("removes empty tracks after deleting a timeline keyframe", () => {
