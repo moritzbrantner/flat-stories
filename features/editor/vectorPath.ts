@@ -116,6 +116,21 @@ export function updatePathHandle(path: VectorPath, anchorId: string, handle: "in
   return changed ? { ...path, anchors } : path;
 }
 
+export function togglePathHandles(path: VectorPath, anchorId: string, radius = 32): VectorPath {
+  let changed = false;
+  const anchors = path.anchors.map((anchor) => {
+    if (anchor.id !== anchorId) return anchor;
+    changed = true;
+    if (anchor.inHandle || anchor.outHandle) return { ...anchor, inHandle: undefined, outHandle: undefined };
+    return {
+      ...anchor,
+      inHandle: { x: anchor.point.x - radius, y: anchor.point.y },
+      outHandle: { x: anchor.point.x + radius, y: anchor.point.y },
+    };
+  });
+  return changed ? { ...path, anchors } : path;
+}
+
 export function appendPathAnchor(path: VectorPath, anchor: PathAnchor): VectorPath {
   if (path.anchors.some((candidate) => candidate.id === anchor.id)) return path;
   return { ...path, anchors: [...path.anchors, anchor] };

@@ -33,6 +33,23 @@ describe("Editor", () => {
     expect(screen.getByRole("button", { name: /Headline/i })).toBeInTheDocument();
   });
 
+  it("exposes direct vector-path authoring for a selected path", async () => {
+    const user = userEvent.setup();
+    render(<Editor initialDocument={fixtureDocument} />);
+    const inspector = within(screen.getByRole("complementary", { name: "Inspector" }));
+    await user.click(inspector.getByRole("button", { name: "path Ground" }));
+    expect(screen.getByLabelText("Path point count")).toHaveTextContent("5");
+    expect(screen.getAllByRole("button", { name: /Path anchor/ })).toHaveLength(5);
+    await user.click(screen.getByRole("button", { name: "Add point" }));
+    expect(screen.getByLabelText("Path point count")).toHaveTextContent("6");
+    expect(screen.getAllByRole("button", { name: /Path anchor/ })).toHaveLength(6);
+  });
+
+  it("keeps grid snapping an explicit editor control", () => {
+    render(<Editor initialDocument={fixtureDocument} />);
+    expect(screen.getByRole("button", { name: "Snap 10" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("exposes the rig and animation vertical slice", () => {
     render(<Editor initialDocument={fixtureDocument} />);
     expect(screen.getByRole("slider", { name: "Timeline time" })).toBeEnabled();

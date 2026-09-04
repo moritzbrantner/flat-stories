@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VectorPath } from "./model";
-import { mirrorPath, movePathAnchor, pathBounds, pathToSvg, updatePathHandle } from "./vectorPath";
+import { mirrorPath, movePathAnchor, pathBounds, pathToSvg, togglePathHandles, updatePathHandle } from "./vectorPath";
 
 const curve: VectorPath = {
   closed: false,
@@ -30,6 +30,13 @@ describe("vector paths", () => {
     const handled = updatePathHandle(moved, "a", "outHandle", { x: 40, y: 80 });
     expect(handled.anchors[0].point).toEqual({ x: 10, y: 20 });
     expect(handled.anchors[0].outHandle).toEqual({ x: 40, y: 80 });
+  });
+
+  it("toggles a straight anchor into symmetric cubic handles", () => {
+    const straight: VectorPath = { closed: false, anchors: [{ id: "a", point: { x: 20, y: 30 } }] };
+    const curved = togglePathHandles(straight, "a", 10);
+    expect(curved.anchors[0]).toMatchObject({ inHandle: { x: 10, y: 30 }, outHandle: { x: 30, y: 30 } });
+    expect(togglePathHandles(curved, "a").anchors[0]).toEqual({ id: "a", point: { x: 20, y: 30 }, inHandle: undefined, outHandle: undefined });
   });
 
   it("mirrors anchors and handles around the path bounds", () => {

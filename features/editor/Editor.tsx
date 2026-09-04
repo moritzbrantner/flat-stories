@@ -3,8 +3,9 @@
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { sampleAnimation } from "./animation";
 import { browserEditorEngine } from "./engine";
-import type { CharacterRig, EditorDocument, EditorObject, GroupObject, Point, Transform } from "./model";
+import type { CharacterRig, EditorDocument, EditorObject, GroupObject, Point, Transform, VectorPath } from "./model";
 import { createObject, type CreatableObjectKind } from "./objectFactory";
+import { PathEditorOverlay } from "./PathEditorOverlay";
 import {
   findObject,
   flattenObjects,
@@ -21,12 +22,15 @@ import {
   solveRigConstraint,
   updateConstraintTarget,
 } from "./rig";
-import { pathToSvg } from "./vectorPath";
+import { snapValue } from "./snapping";
+import { appendPathAnchor, mirrorPath, movePathAnchor, pathToSvg, togglePathHandles, updatePathHandle } from "./vectorPath";
 
 type EditorProps = { initialDocument: EditorDocument };
 type Viewport = Point & { zoom: number };
 type DragState = { id: string; pointer: Point; transform: Transform; basisRotation: number };
+type PathHandle = "inHandle" | "outHandle";
 
+const GRID_STEP = 10;
 const tools: { kind: CreatableObjectKind; label: string }[] = [
   { kind: "rectangle", label: "Rectangle" },
   { kind: "circle", label: "Circle" },
@@ -47,6 +51,7 @@ export function Editor({ initialDocument }: EditorProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>(() => prepared.objects.at(-1)?.id ? [prepared.objects.at(-1)!.id] : []);
   const [viewport, setViewport] = useState<Viewport>({ x: 70, y: 50, zoom: 0.85 });
   const [showRig, setShowRig] = useState(Boolean(prepared.rig));
+  const [snapToGrid, setSnapToGrid] = useState(true);
   const [clipId, setClipId] = useState<string | null>(prepared.animations[0]?.id ?? null);
   const [currentTime, setCurrentTime] = useState(0);
   const panStart = useRef<{ pointer: Point; viewport: Point } | null>(null);
@@ -90,6 +95,23 @@ export function Editor({ initialDocument }: EditorProps) {
   function updateSelectedTransform(patch: Partial<Transform>) {
     if (!selectedId) return;
     setDocument((current) => patchObjectTransform(current, selectedId, patch));
+  }
+
+  function updatePath(pathId: string, update: (path: VectorPath) => VectorPath) {
+    setDocument((current) => {
+      const object = findObject(current.objects, pathId);
+      if (!object || object.kind !== "path" || object.locked) return current;
+      const path = update(object.path);
+      return path === object.path ? current : patchObject(current, pathId, { path } as Partial<EditorObject>);
+    });
+  }
+
+  function addPathPoint(pathId: string) {
+    const anchorId = `${pathId}-anchor-${++idCounter.current}`;
+    updatePath(pathId, (path) => {
+      const last = path.anchors.at(-1)?.point ?? { x: 100, y: 100 };
+      return appendPathAnchor(path, { id: anchorId, point: { x: last.x + 48, y: last.y } });
+    });
   }
 
   function groupSelection() {
@@ -139,9 +161,11 @@ export function Editor({ initialDocument }: EditorProps) {
       y: (event.clientY - drag.pointer.y) / viewport.zoom,
     };
     const localDelta = rotateVector(worldDelta, -drag.basisRotation);
+    const x = drag.transform.x + localDelta.x;
+    const y = drag.transform.y + localDelta.y;
     setDocument((current) => patchObjectTransform(current, drag.id, {
-      x: drag.transform.x + localDelta.x,
-      y: drag.transform.y + localDelta.y,
+      x: snapToGrid ? snapValue(x, GRID_STEP) : x,
+      y: snapToGrid ? snapValue(y, GRID_STEP) : y,
     }));
   }
 
@@ -155,6 +179,7 @@ export function Editor({ initialDocument }: EditorProps) {
     <header className="topbar">
       <div><strong>Flat Stories</strong><span>{document.name}</span></div>
       <div className="topbar-actions">
+        <button type="button" aria-pressed={snapToGrid} onClick={() => setSnapToGrid((current) => !current)}>Snap 10</button>
         <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>
         <output>{Math.round(viewport.zoom * 100)}%</output>
       </div>
@@ -162,8 +187,7 @@ export function Editor({ initialDocument }: EditorProps) {
 
     <aside className="toolbar" aria-label="Drawing tools">
       {tools.map((tool) => <button key={tool.kind} type="button" onClick={() => addObject(tool.kind)}>
-        <span aria-hidden>{tool.label[0]}</span>{tool.label}
-      </button>)}
+        <span aria-hidden>{tool.label[0]}</span>{tool.label}</button>)}
       <hr />
       <button type="button" disabled={!canGroup} onClick={groupSelection}><span aria-hidden>G</span>Group</button>
       <button type="button" disabled={!canUngroup} onClick={ungroupSelection}><span aria-hidden>U</span>Ungroup</button>
@@ -198,6 +222,9 @@ export function Editor({ initialDocument }: EditorProps) {
           onPointerDown={startObjectDrag}
           onPointerMove={moveObjectDrag}
           onPointerUp={endObjectDrag}
+          onPathAnchorMove={(pathId, anchorId, point) => updatePath(pathId, (path) => movePathAnchor(path, anchorId, point))}
+          onPathHandleMove={(pathId, anchorId, handle, point) => updatePath(pathId, (path) => updatePathHandle(path, anchorId, handle, point))}
+          onPathToggleHandles={(pathId, anchorId) => updatePath(pathId, (path) => togglePathHandles(path, anchorId))}
         />)}
         {showRig && displayDocument.rig ? <RigOverlay rig={displayDocument.rig} /> : null}
       </svg>
@@ -206,7 +233,10 @@ export function Editor({ initialDocument }: EditorProps) {
     <aside className="inspector" aria-label="Inspector">
       <section>
         <h2>Properties</h2>
-        {selected ? <Properties object={selected} onChange={updateSelected} onTransformChange={updateSelectedTransform} /> : <p>Select an object.</p>}
+        {selected ? <Properties object={selected} onChange={updateSelected} onTransformChange={updateSelectedTransform}
+          onPathAddPoint={() => addPathPoint(selected.id)}
+          onPathToggleClosed={() => updatePath(selected.id, (path) => ({ ...path, closed: !path.closed }))}
+          onPathMirror={(axis) => updatePath(selected.id, (path) => mirrorPath(path, axis))} /> : <p>Select an object.</p>}
       </section>
       <section>
         <h2>Layers</h2>
@@ -242,7 +272,8 @@ export function Editor({ initialDocument }: EditorProps) {
   </main>;
 }
 
-function ObjectView({ object, rig, selectedIds, inheritedSelection, onPointerDown, onPointerMove, onPointerUp }: {
+function ObjectView({ object, rig, selectedIds, inheritedSelection, onPointerDown, onPointerMove, onPointerUp,
+  onPathAnchorMove, onPathHandleMove, onPathToggleHandles }: {
   object: EditorObject;
   rig?: CharacterRig;
   selectedIds: readonly string[];
@@ -250,9 +281,13 @@ function ObjectView({ object, rig, selectedIds, inheritedSelection, onPointerDow
   onPointerDown: (event: ReactPointerEvent<SVGElement>, object: EditorObject) => void;
   onPointerMove: (event: ReactPointerEvent<SVGElement>) => void;
   onPointerUp: (event: ReactPointerEvent<SVGElement>) => void;
+  onPathAnchorMove: (pathId: string, anchorId: string, point: Point) => void;
+  onPathHandleMove: (pathId: string, anchorId: string, handle: PathHandle, point: Point) => void;
+  onPathToggleHandles: (pathId: string, anchorId: string) => void;
 }) {
   if (!object.visible) return null;
-  const selected = inheritedSelection || selectedIds.includes(object.id);
+  const exactSelected = selectedIds.includes(object.id);
+  const selected = inheritedSelection || exactSelected;
   const nodeTransform = objectTransformToSvg(object.transform);
   const boneTransform = object.boneId && rig ? boneWorldTransformToSvg(rig, object.boneId) : undefined;
   const interaction = {
@@ -264,10 +299,15 @@ function ObjectView({ object, rig, selectedIds, inheritedSelection, onPointerDow
   const content = object.kind === "group"
     ? <g transform={nodeTransform} opacity={object.opacity} data-node-id={object.id}>
         {object.children.map((child) => <ObjectView key={child.id} object={child} rig={rig} selectedIds={selectedIds}
-          inheritedSelection={selected} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} />)}
+          inheritedSelection={selected} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+          onPathAnchorMove={onPathAnchorMove} onPathHandleMove={onPathHandleMove} onPathToggleHandles={onPathToggleHandles} />)}
       </g>
     : <g transform={nodeTransform} opacity={object.opacity} data-node-id={object.id}>
         <DrawableView object={object} selected={selected} interaction={interaction} />
+        {object.kind === "path" && exactSelected && !object.locked ? <PathEditorOverlay path={object.path}
+          onMoveAnchor={(anchorId, point) => onPathAnchorMove(object.id, anchorId, point)}
+          onMoveHandle={(anchorId, handle, point) => onPathHandleMove(object.id, anchorId, handle, point)}
+          onToggleHandles={(anchorId) => onPathToggleHandles(object.id, anchorId)} /> : null}
       </g>;
 
   return boneTransform ? <g transform={boneTransform}>{content}</g> : content;
@@ -297,10 +337,13 @@ function DrawableView({ object, selected, interaction }: {
   }
 }
 
-function Properties({ object, onChange, onTransformChange }: {
+function Properties({ object, onChange, onTransformChange, onPathAddPoint, onPathToggleClosed, onPathMirror }: {
   object: EditorObject;
   onChange: (patch: Partial<EditorObject>) => void;
   onTransformChange: (patch: Partial<Transform>) => void;
+  onPathAddPoint: () => void;
+  onPathToggleClosed: () => void;
+  onPathMirror: (axis: "horizontal" | "vertical") => void;
 }) {
   return <div className="properties">
     <label>Name<input value={object.name} onChange={(event) => onChange({ name: event.target.value })} /></label>
@@ -326,7 +369,12 @@ function Properties({ object, onChange, onTransformChange }: {
       <NumberField label="Radius" value={object.cornerRadius} min={0} onChange={(value) => onChange({ cornerRadius: value } as Partial<EditorObject>)} />
     </> : null}
     {object.kind === "circle" ? <NumberField label="Radius" value={object.radius} min={1} onChange={(value) => onChange({ radius: value } as Partial<EditorObject>)} /> : null}
-    {object.kind === "path" ? <label>Points<output>{object.path.anchors.length}</output></label> : null}
+    {object.kind === "path" ? <div className="path-actions">
+      <label>Points<output aria-label="Path point count">{object.path.anchors.length}</output></label>
+      <div><button type="button" onClick={onPathAddPoint}>Add point</button><button type="button" onClick={onPathToggleClosed}>{object.path.closed ? "Open path" : "Close path"}</button></div>
+      <div><button type="button" onClick={() => onPathMirror("horizontal")}>Flip H</button><button type="button" onClick={() => onPathMirror("vertical")}>Flip V</button></div>
+      <small>Drag anchors and Bézier handles on canvas. Double-click an anchor to add or remove handles.</small>
+    </div> : null}
   </div>;
 }
 
