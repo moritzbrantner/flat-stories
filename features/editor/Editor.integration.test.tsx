@@ -79,7 +79,7 @@ describe("Editor", () => {
     await user.type(x, "25");
     await user.type(screen.getByLabelText("Pose name"), "Caption offset");
     await user.click(screen.getByRole("button", { name: "Save pose" }));
-    expect(screen.getByText("Caption offset")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply pose Caption offset" })).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText("X"));
     await user.type(screen.getByLabelText("X"), "80");
@@ -103,6 +103,22 @@ describe("Editor", () => {
     await user.type(screen.getByLabelText("Opacity"), "1");
     await user.click(screen.getByRole("button", { name: "Apply expression Left blink" }));
     expect(screen.getByLabelText("Opacity")).toHaveValue(0.25);
+  });
+
+  it("keys a saved pose into the selected animation and removes those keys again", async () => {
+    const user = userEvent.setup();
+    render(<Editor initialDocument={fixtureDocument} />);
+    expect(screen.getByRole("button", { name: "Key pose" })).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Pose name"), "Timeline pose");
+    await user.click(screen.getByRole("button", { name: "Save pose" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Animation clip" }), "hello");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Keyframe pose" }), screen.getByRole("option", { name: "Timeline pose" }));
+    await user.click(screen.getByRole("button", { name: "Key pose" }));
+    expect(screen.getByText("node:caption · transform.x")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Remove keys at time" }));
+    expect(screen.queryByText("node:caption · transform.x")).not.toBeInTheDocument();
   });
 
   it("keeps grid snapping an explicit editor control", () => {
