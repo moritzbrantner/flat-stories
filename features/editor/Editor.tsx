@@ -2,11 +2,13 @@
 
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { sampleAnimation } from "./animation";
+import { CharacterPresetPanel } from "./CharacterPresetPanel";
 import { browserEditorEngine } from "./engine";
 import { alignObjects, canArrangeSelection, distributeObjects, type Alignment, type Distribution } from "./layout";
 import type { CharacterRig, DrawableObject, EditorDocument, EditorObject, GroupObject, Point, StrokeLinecap, StrokeLinejoin, Transform, VectorPath } from "./model";
 import { createObject, type CreatableObjectKind } from "./objectFactory";
 import { PathEditorOverlay } from "./PathEditorOverlay";
+import { applyCharacterPose, applyExpression, captureCharacterPose, captureExpression, upsertExpression, upsertPose } from "./poses";
 import {
   duplicateSiblingObjects,
   findObject,
@@ -74,10 +76,10 @@ export function Editor({ initialDocument }: EditorProps) {
   const editingEnabled = clipId === null;
   const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);
 
-  function nextId(prefix: string) {
+  function nextId(prefix: string, existingIds: readonly string[] = []) {
     let id: string;
     do id = `${prefix}-${++idCounter.current}`;
-    while (findObject(document.objects, id));
+    while (findObject(document.objects, id) || existingIds.includes(id));
     return id;
   }
 
@@ -168,6 +170,34 @@ export function Editor({ initialDocument }: EditorProps) {
   function updateRig(update: (rig: CharacterRig) => CharacterRig) {
     if (!editingEnabled) return;
     setDocument((current) => current.rig ? { ...current, rig: update(current.rig) } : current);
+  }
+
+  function savePose(name: string) {
+    if (!editingEnabled || !document.rig) return;
+    const id = nextId("pose", (document.poses ?? []).map((pose) => pose.id));
+    setDocument((current) => upsertPose(current, captureCharacterPose(current, id, name)));
+  }
+
+  function applySavedPose(id: string) {
+    if (!editingEnabled) return;
+    setDocument((current) => {
+      const pose = (current.poses ?? []).find((candidate) => candidate.id === id);
+      return pose ? applyCharacterPose(current, pose) : current;
+    });
+  }
+
+  function saveExpression(name: string) {
+    if (!editingEnabled || selectedIds.length === 0) return;
+    const id = nextId("expression", (document.expressions ?? []).map((expression) => expression.id));
+    setDocument((current) => upsertExpression(current, captureExpression(current, id, name, selectedIds)));
+  }
+
+  function applySavedExpression(id: string) {
+    if (!editingEnabled) return;
+    setDocument((current) => {
+      const expression = (current.expressions ?? []).find((candidate) => candidate.id === id);
+      return expression ? applyExpression(current, expression) : current;
+    });
   }
 
   function startObjectDrag(event: ReactPointerEvent<SVGElement>, object: EditorObject) {
@@ -310,6 +340,17 @@ export function Editor({ initialDocument }: EditorProps) {
           </button>
         </li>)}</ol>
       </section>
+      <CharacterPresetPanel
+        poses={document.poses ?? []}
+        expressions={document.expressions ?? []}
+        disabled={!editingEnabled}
+        canCapturePose={Boolean(document.rig)}
+        selectedCount={selectedIds.length}
+        onCapturePose={savePose}
+        onApplyPose={applySavedPose}
+        onCaptureExpression={saveExpression}
+        onApplyExpression={applySavedExpression}
+      />
       {document.rig ? <RigPanel rig={document.rig} disabled={!editingEnabled} onChange={updateRig} /> : null}
     </aside>
 
