@@ -3,8 +3,9 @@
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { sampleAnimation } from "./animation";
 import { browserEditorEngine } from "./engine";
-import type { CharacterRig, EditorDocument, EditorObject, GroupObject, Point, Transform } from "./model";
+import type { CharacterRig, DrawableObject, EditorDocument, EditorObject, GroupObject, Point, Transform, VectorPath } from "./model";
 import { createObject, type CreatableObjectKind } from "./objectFactory";
+import { PathEditorOverlay } from "./PathEditorOverlay";
 import {
   findObject,
   flattenObjects,
@@ -21,11 +22,16 @@ import {
   solveRigConstraint,
   updateConstraintTarget,
 } from "./rig";
+import { snapValue } from "./snapping";
+import { TransformOverlay } from "./TransformOverlay";
+import { appendPathAnchor, mirrorPath, movePathAnchor, pathToSvg, togglePathHandles, updatePathHandle } from "./vectorPath";
 
 type EditorProps = { initialDocument: EditorDocument };
 type Viewport = Point & { zoom: number };
 type DragState = { id: string; pointer: Point; transform: Transform; basisRotation: number };
+type PathHandle = "inHandle" | "outHandle";
 
+const GRID_STEP = 10;
 const tools: { kind: CreatableObjectKind; label: string }[] = [
   { kind: "rectangle", label: "Rectangle" },
   { kind: "circle", label: "Circle" },
@@ -46,7 +52,8 @@ export function Editor({ initialDocument }: EditorProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>(() => prepared.objects.at(-1)?.id ? [prepared.objects.at(-1)!.id] : []);
   const [viewport, setViewport] = useState<Viewport>({ x: 70, y: 50, zoom: 0.85 });
   const [showRig, setShowRig] = useState(Boolean(prepared.rig));
-  const [clipId, setClipId] = useState<string | null>(prepared.animations[0]?.id ?? null);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [clipId, setClipId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const panStart = useRef<{ pointer: Point; viewport: Point } | null>(null);
   const objectDrag = useRef<DragState | null>(null);
@@ -60,6 +67,7 @@ export function Editor({ initialDocument }: EditorProps) {
   const rootIds = useMemo(() => new Set(document.objects.map((object) => object.id)), [document.objects]);
   const canGroup = selectedIds.length > 1 && selectedIds.every((id) => rootIds.has(id));
   const canUngroup = selectedIds.length === 1 && rootIds.has(selectedIds[0]) && selected?.kind === "group";
+  const editingEnabled = clipId === null;
 
   function nextId(prefix: string) {
     let id: string;
@@ -76,36 +84,61 @@ export function Editor({ initialDocument }: EditorProps) {
   }
 
   function addObject(kind: CreatableObjectKind) {
+    if (!editingEnabled) return;
     const object = createObject(kind, nextId(kind));
     setDocument((current) => ({ ...current, objects: [...current.objects, object] }));
     setSelectedIds([object.id]);
   }
 
   function updateSelected(patch: Partial<EditorObject>) {
-    if (!selectedId) return;
+    if (!selectedId || !editingEnabled) return;
     setDocument((current) => patchObject(current, selectedId, patch));
   }
 
   function updateSelectedTransform(patch: Partial<Transform>) {
-    if (!selectedId) return;
+    if (!selectedId || !editingEnabled) return;
     setDocument((current) => patchObjectTransform(current, selectedId, patch));
   }
 
+  function replaceDrawable(id: string, drawable: DrawableObject) {
+    if (!editingEnabled) return;
+    setDocument((current) => patchObject(current, id, drawable as Partial<EditorObject>));
+  }
+
+  function updatePath(pathId: string, update: (path: VectorPath) => VectorPath) {
+    if (!editingEnabled) return;
+    setDocument((current) => {
+      const object = findObject(current.objects, pathId);
+      if (!object || object.kind !== "path" || object.locked) return current;
+      const path = update(object.path);
+      return path === object.path ? current : patchObject(current, pathId, { path } as Partial<EditorObject>);
+    });
+  }
+
+  function addPathPoint(pathId: string) {
+    const anchorId = `${pathId}-anchor-${++idCounter.current}`;
+    updatePath(pathId, (path) => {
+      const last = path.anchors.at(-1)?.point ?? { x: 100, y: 100 };
+      return appendPathAnchor(path, { id: anchorId, point: { x: last.x + 48, y: last.y } });
+    });
+  }
+
   function groupSelection() {
-    if (!canGroup) return;
+    if (!canGroup || !editingEnabled) return;
     const id = nextId("group");
     setDocument((current) => groupRootObjects(current, selectedIds, id));
     setSelectedIds([id]);
   }
 
   function ungroupSelection() {
-    if (!canUngroup || !selectedId || selected?.kind !== "group") return;
+    if (!canUngroup || !selectedId || selected?.kind !== "group" || !editingEnabled) return;
     const childIds = selected.children.map((child) => child.id);
     setDocument((current) => ungroupRootObject(current, selectedId));
     setSelectedIds(childIds);
   }
 
   function updateRig(update: (rig: CharacterRig) => CharacterRig) {
+    if (!editingEnabled) return;
     setDocument((current) => current.rig ? { ...current, rig: update(current.rig) } : current);
   }
 
@@ -116,7 +149,7 @@ export function Editor({ initialDocument }: EditorProps) {
       return;
     }
     selectNode(object.id);
-    if (object.locked) return;
+    if (object.locked || !editingEnabled) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const basisRotation = object.boneId && displayDocument.rig
       ? (getBoneWorldPose(displayDocument.rig, object.boneId)?.rotation ?? 0)
@@ -138,9 +171,11 @@ export function Editor({ initialDocument }: EditorProps) {
       y: (event.clientY - drag.pointer.y) / viewport.zoom,
     };
     const localDelta = rotateVector(worldDelta, -drag.basisRotation);
+    const x = drag.transform.x + localDelta.x;
+    const y = drag.transform.y + localDelta.y;
     setDocument((current) => patchObjectTransform(current, drag.id, {
-      x: drag.transform.x + localDelta.x,
-      y: drag.transform.y + localDelta.y,
+      x: snapToGrid ? snapValue(x, GRID_STEP) : x,
+      y: snapToGrid ? snapValue(y, GRID_STEP) : y,
     }));
   }
 
@@ -154,18 +189,18 @@ export function Editor({ initialDocument }: EditorProps) {
     <header className="topbar">
       <div><strong>Flat Stories</strong><span>{document.name}</span></div>
       <div className="topbar-actions">
+        <button type="button" aria-pressed={snapToGrid} onClick={() => setSnapToGrid((current) => !current)}>Snap 10</button>
         <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>
         <output>{Math.round(viewport.zoom * 100)}%</output>
       </div>
     </header>
 
     <aside className="toolbar" aria-label="Drawing tools">
-      {tools.map((tool) => <button key={tool.kind} type="button" onClick={() => addObject(tool.kind)}>
-        <span aria-hidden>{tool.label[0]}</span>{tool.label}
-      </button>)}
+      {tools.map((tool) => <button key={tool.kind} type="button" disabled={!editingEnabled} onClick={() => addObject(tool.kind)}>
+        <span aria-hidden>{tool.label[0]}</span>{tool.label}</button>)}
       <hr />
-      <button type="button" disabled={!canGroup} onClick={groupSelection}><span aria-hidden>G</span>Group</button>
-      <button type="button" disabled={!canUngroup} onClick={ungroupSelection}><span aria-hidden>U</span>Ungroup</button>
+      <button type="button" disabled={!canGroup || !editingEnabled} onClick={groupSelection}><span aria-hidden>G</span>Group</button>
+      <button type="button" disabled={!canUngroup || !editingEnabled} onClick={ungroupSelection}><span aria-hidden>U</span>Ungroup</button>
     </aside>
 
     <section className="canvas-region" aria-label="Canvas workspace"
@@ -194,9 +229,15 @@ export function Editor({ initialDocument }: EditorProps) {
           rig={displayDocument.rig}
           selectedIds={selectedIds}
           inheritedSelection={false}
+          editingEnabled={editingEnabled}
           onPointerDown={startObjectDrag}
           onPointerMove={moveObjectDrag}
           onPointerUp={endObjectDrag}
+          onDrawableChange={replaceDrawable}
+          onRotationChange={(id, rotation) => setDocument((current) => patchObjectTransform(current, id, { rotation }))}
+          onPathAnchorMove={(pathId, anchorId, point) => updatePath(pathId, (path) => movePathAnchor(path, anchorId, point))}
+          onPathHandleMove={(pathId, anchorId, handle, point) => updatePath(pathId, (path) => updatePathHandle(path, anchorId, handle, point))}
+          onPathToggleHandles={(pathId, anchorId) => updatePath(pathId, (path) => togglePathHandles(path, anchorId))}
         />)}
         {showRig && displayDocument.rig ? <RigOverlay rig={displayDocument.rig} /> : null}
       </svg>
@@ -205,7 +246,11 @@ export function Editor({ initialDocument }: EditorProps) {
     <aside className="inspector" aria-label="Inspector">
       <section>
         <h2>Properties</h2>
-        {selected ? <Properties object={selected} onChange={updateSelected} onTransformChange={updateSelectedTransform} /> : <p>Select an object.</p>}
+        {!editingEnabled ? <p className="preview-note">Animation preview is read-only. Choose Rest pose to edit artwork or rig geometry.</p> : null}
+        {selected ? <Properties object={selected} disabled={!editingEnabled} onChange={updateSelected} onTransformChange={updateSelectedTransform}
+          onPathAddPoint={() => addPathPoint(selected.id)}
+          onPathToggleClosed={() => updatePath(selected.id, (path) => ({ ...path, closed: !path.closed }))}
+          onPathMirror={(axis) => updatePath(selected.id, (path) => mirrorPath(path, axis))} /> : <p>Select an object.</p>}
       </section>
       <section>
         <h2>Layers</h2>
@@ -216,7 +261,7 @@ export function Editor({ initialDocument }: EditorProps) {
           </button>
         </li>)}</ol>
       </section>
-      {document.rig ? <RigPanel rig={document.rig} onChange={updateRig} /> : null}
+      {document.rig ? <RigPanel rig={document.rig} disabled={!editingEnabled} onChange={updateRig} /> : null}
     </aside>
 
     <footer className="timeline" aria-label="Animation timeline">
@@ -241,17 +286,25 @@ export function Editor({ initialDocument }: EditorProps) {
   </main>;
 }
 
-function ObjectView({ object, rig, selectedIds, inheritedSelection, onPointerDown, onPointerMove, onPointerUp }: {
+function ObjectView({ object, rig, selectedIds, inheritedSelection, editingEnabled, onPointerDown, onPointerMove, onPointerUp,
+  onDrawableChange, onRotationChange, onPathAnchorMove, onPathHandleMove, onPathToggleHandles }: {
   object: EditorObject;
   rig?: CharacterRig;
   selectedIds: readonly string[];
   inheritedSelection: boolean;
+  editingEnabled: boolean;
   onPointerDown: (event: ReactPointerEvent<SVGElement>, object: EditorObject) => void;
   onPointerMove: (event: ReactPointerEvent<SVGElement>) => void;
   onPointerUp: (event: ReactPointerEvent<SVGElement>) => void;
+  onDrawableChange: (id: string, object: DrawableObject) => void;
+  onRotationChange: (id: string, rotation: number) => void;
+  onPathAnchorMove: (pathId: string, anchorId: string, point: Point) => void;
+  onPathHandleMove: (pathId: string, anchorId: string, handle: PathHandle, point: Point) => void;
+  onPathToggleHandles: (pathId: string, anchorId: string) => void;
 }) {
   if (!object.visible) return null;
-  const selected = inheritedSelection || selectedIds.includes(object.id);
+  const exactSelected = selectedIds.includes(object.id);
+  const selected = inheritedSelection || exactSelected;
   const nodeTransform = objectTransformToSvg(object.transform);
   const boneTransform = object.boneId && rig ? boneWorldTransformToSvg(rig, object.boneId) : undefined;
   const interaction = {
@@ -263,10 +316,19 @@ function ObjectView({ object, rig, selectedIds, inheritedSelection, onPointerDow
   const content = object.kind === "group"
     ? <g transform={nodeTransform} opacity={object.opacity} data-node-id={object.id}>
         {object.children.map((child) => <ObjectView key={child.id} object={child} rig={rig} selectedIds={selectedIds}
-          inheritedSelection={selected} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} />)}
+          inheritedSelection={selected} editingEnabled={editingEnabled} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+          onDrawableChange={onDrawableChange} onRotationChange={onRotationChange}
+          onPathAnchorMove={onPathAnchorMove} onPathHandleMove={onPathHandleMove} onPathToggleHandles={onPathToggleHandles} />)}
       </g>
     : <g transform={nodeTransform} opacity={object.opacity} data-node-id={object.id}>
         <DrawableView object={object} selected={selected} interaction={interaction} />
+        {exactSelected && !object.locked && editingEnabled ? <TransformOverlay object={object}
+          onGeometryChange={(next) => onDrawableChange(object.id, next)}
+          onRotationChange={(rotation) => onRotationChange(object.id, rotation)} /> : null}
+        {object.kind === "path" && exactSelected && !object.locked && editingEnabled ? <PathEditorOverlay path={object.path}
+          onMoveAnchor={(anchorId, point) => onPathAnchorMove(object.id, anchorId, point)}
+          onMoveHandle={(anchorId, handle, point) => onPathHandleMove(object.id, anchorId, handle, point)}
+          onToggleHandles={(anchorId) => onPathToggleHandles(object.id, anchorId)} /> : null}
       </g>;
 
   return boneTransform ? <g transform={boneTransform}>{content}</g> : content;
@@ -291,21 +353,27 @@ function DrawableView({ object, selected, interaction }: {
   switch (object.kind) {
     case "rectangle": return <rect {...common} x={object.x} y={object.y} width={object.width} height={object.height} rx={object.cornerRadius} />;
     case "circle": return <circle {...common} cx={object.cx} cy={object.cy} r={object.radius} />;
-    case "path": return <path {...common} d={object.d} />;
+    case "path": return <path {...common} d={pathToSvg(object.path)} />;
     case "text": return <text {...common} x={object.x} y={object.y} fontSize={object.fontSize} fontWeight="700">{object.value}</text>;
   }
 }
 
-function Properties({ object, onChange, onTransformChange }: {
+function Properties({ object, disabled, onChange, onTransformChange, onPathAddPoint, onPathToggleClosed, onPathMirror }: {
   object: EditorObject;
+  disabled: boolean;
   onChange: (patch: Partial<EditorObject>) => void;
   onTransformChange: (patch: Partial<Transform>) => void;
+  onPathAddPoint: () => void;
+  onPathToggleClosed: () => void;
+  onPathMirror: (axis: "horizontal" | "vertical") => void;
 }) {
-  return <div className="properties">
+  return <fieldset className="properties" disabled={disabled}>
     <label>Name<input value={object.name} onChange={(event) => onChange({ name: event.target.value })} /></label>
     <NumberField label="X" value={object.transform.x} onChange={(value) => onTransformChange({ x: value })} />
     <NumberField label="Y" value={object.transform.y} onChange={(value) => onTransformChange({ y: value })} />
     <NumberField label="Rotate" value={object.transform.rotation} onChange={(value) => onTransformChange({ rotation: value })} />
+    <NumberField label="Pivot X" value={object.transform.pivotX} onChange={(value) => onTransformChange({ pivotX: value })} />
+    <NumberField label="Pivot Y" value={object.transform.pivotY} onChange={(value) => onTransformChange({ pivotY: value })} />
     <NumberField label="Scale X" value={object.transform.scaleX} step={0.05} onChange={(value) => onTransformChange({ scaleX: value })} />
     <NumberField label="Scale Y" value={object.transform.scaleY} step={0.05} onChange={(value) => onTransformChange({ scaleY: value })} />
     <NumberField label="Opacity" value={object.opacity} step={0.05} min={0} max={1} onChange={(value) => onChange({ opacity: value })} />
@@ -325,8 +393,13 @@ function Properties({ object, onChange, onTransformChange }: {
       <NumberField label="Radius" value={object.cornerRadius} min={0} onChange={(value) => onChange({ cornerRadius: value } as Partial<EditorObject>)} />
     </> : null}
     {object.kind === "circle" ? <NumberField label="Radius" value={object.radius} min={1} onChange={(value) => onChange({ radius: value } as Partial<EditorObject>)} /> : null}
-    {object.kind === "path" ? <label>Path<input value={object.d} onChange={(event) => onChange({ d: event.target.value } as Partial<EditorObject>)} /></label> : null}
-  </div>;
+    {object.kind === "path" ? <div className="path-actions">
+      <label>Points<output aria-label="Path point count">{object.path.anchors.length}</output></label>
+      <div><button type="button" onClick={onPathAddPoint}>Add point</button><button type="button" onClick={onPathToggleClosed}>{object.path.closed ? "Open path" : "Close path"}</button></div>
+      <div><button type="button" onClick={() => onPathMirror("horizontal")}>Flip H</button><button type="button" onClick={() => onPathMirror("vertical")}>Flip V</button></div>
+      <small>Drag anchors and Bézier handles on canvas. Double-click an anchor to add or remove handles.</small>
+    </div> : null}
+  </fieldset>;
 }
 
 function NumberField({ label, value, onChange, min, max, step = 1 }: {
@@ -341,15 +414,15 @@ function NumberField({ label, value, onChange, min, max, step = 1 }: {
     onChange={(event) => onChange(Number(event.target.value))} /></label>;
 }
 
-function RigPanel({ rig, onChange }: { rig: CharacterRig; onChange: (update: (rig: CharacterRig) => CharacterRig) => void }) {
+function RigPanel({ rig, disabled, onChange }: { rig: CharacterRig; disabled: boolean; onChange: (update: (rig: CharacterRig) => CharacterRig) => void }) {
   return <section>
-    <div className="section-heading"><h2>Rig</h2><button type="button" onClick={() => onChange(resetRigPose)}>Reset pose</button></div>
+    <div className="section-heading"><h2>Rig</h2><button type="button" disabled={disabled} onClick={() => onChange(resetRigPose)}>Reset pose</button></div>
     <div className="bone-list">{rig.bones.map((bone) => <span key={bone.id}>{bone.name}<output>{bone.rotation.toFixed(1)}°</output></span>)}</div>
     <div className="constraints">{rig.constraints.map((constraint) => <article key={constraint.id}>
       <strong>{constraint.name}</strong>
       <NumberField label="Target X" value={constraint.target.x} onChange={(x) => onChange((current) => updateConstraintTarget(current, constraint.id, { x }))} />
       <NumberField label="Target Y" value={constraint.target.y} onChange={(y) => onChange((current) => updateConstraintTarget(current, constraint.id, { y }))} />
-      <button type="button" onClick={() => onChange((current) => solveRigConstraint(current, constraint.id))}>Solve IK</button>
+      <button type="button" disabled={disabled} onClick={() => onChange((current) => solveRigConstraint(current, constraint.id))}>Solve IK</button>
     </article>)}</div>
   </section>;
 }
