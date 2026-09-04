@@ -10,6 +10,7 @@ import { alignObjects, canArrangeSelection, distributeObjects, type Alignment, t
 import type { AnimationTrack, CharacterRig, DrawableObject, Easing, EditorDocument, EditorObject, GroupObject, NumberKeyframe, Point, StrokeLinecap, StrokeLinejoin, Transform, VectorPath } from "./model";
 import { createObject, type CreatableObjectKind } from "./objectFactory";
 import { PathEditorOverlay } from "./PathEditorOverlay";
+import { PlaybackControls } from "./PlaybackControls";
 import { applyCharacterPose, applyExpression, captureCharacterPose, captureExpression, upsertExpression, upsertPose } from "./poses";
 import { PropertyKeyControls } from "./PropertyKeyControls";
 import {
@@ -422,6 +423,7 @@ export function Editor({ initialDocument }: EditorProps) {
         </select>
         <output>{currentTime.toFixed(2)}s{selectedClip ? ` / ${selectedClip.duration.toFixed(2)}s` : ""}</output>
       </div>
+      <PlaybackControls key={selectedClip?.id ?? "rest"} clip={selectedClip} currentTime={currentTime} onTimeChange={setCurrentTime} />
       <TimelinePoseControls poses={document.poses ?? []} clipSelected={Boolean(selectedClip)}
         onKeyPose={keyPoseAtCurrentTime} onRemoveKeysAtTime={removeKeysAtCurrentTime} />
       <PropertyKeyControls selectedNode={displaySelected} rig={displayDocument.rig} clipSelected={Boolean(selectedClip)} currentTime={currentTime}
