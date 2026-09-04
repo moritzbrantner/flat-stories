@@ -28,6 +28,14 @@ function trackId(targetKind: "node" | "bone", targetId: string, property: string
   return `${targetKind}:${targetId}:${property}`;
 }
 
+function isLogicalTrack(
+  track: AnimationTrack,
+  target: AnimationTrack["target"],
+  property: AnimationTrack["property"],
+) {
+  return track.target.kind === target.kind && track.target.id === target.id && track.property === property;
+}
+
 function upsertTrackKeyframe(
   tracks: readonly AnimationTrack[],
   target: AnimationTrack["target"],
@@ -35,14 +43,29 @@ function upsertTrackKeyframe(
   keyframe: NumberKeyframe,
 ): AnimationTrack[] {
   const id = trackId(target.kind, target.id, property);
-  const existing = tracks.find((track) => track.id === id);
+  const existing = tracks.find((track) => track.id === id || isLogicalTrack(track, target, property));
   if (!existing) {
     const next = { id, target, property, keyframes: [keyframe] } as AnimationTrack;
     return [...tracks, next];
   }
-  return tracks.map((track) => track.id === id
+  return tracks.map((track) => track.id === existing.id
     ? { ...track, keyframes: upsertNumberKeyframe(track.keyframes, keyframe) } as AnimationTrack
     : track);
+}
+
+export function keyframeProperty(
+  clip: AnimationClip,
+  target: AnimationTrack["target"],
+  property: AnimationTrack["property"],
+  value: number,
+  time: number,
+  easing: Easing = "ease-in-out",
+): AnimationClip {
+  const clampedTime = Math.max(0, Math.min(clip.duration, time));
+  return {
+    ...clip,
+    tracks: upsertTrackKeyframe(clip.tracks, target, property, { time: clampedTime, value, easing }),
+  };
 }
 
 export function keyframePose(
