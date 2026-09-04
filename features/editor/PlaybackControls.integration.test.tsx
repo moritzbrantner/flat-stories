@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AnimationClip } from "./model";
 import { PlaybackControls } from "./PlaybackControls";
 
@@ -13,8 +13,6 @@ const clip: AnimationClip = {
   loop: false,
   tracks: [],
 };
-
-afterEach(() => vi.unstubAllGlobals());
 
 describe("playback controls", () => {
   it("plays, pauses, advances the preview clock and restarts", async () => {
@@ -36,20 +34,25 @@ describe("playback controls", () => {
     }
 
     const user = userEvent.setup();
-    render(<Harness />);
-    expect(screen.getByText("Once")).toBeInTheDocument();
+    const { unmount } = render(<Harness />);
+    try {
+      expect(screen.getByText("Once")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Play" }));
-    expect(screen.getByRole("button", { name: "Pause" })).toHaveAttribute("aria-pressed", "true");
+      await user.click(screen.getByRole("button", { name: "Play" }));
+      expect(screen.getByRole("button", { name: "Pause" })).toHaveAttribute("aria-pressed", "true");
 
-    act(() => callbacks.get(1)?.(1000));
-    act(() => callbacks.get(2)?.(1250));
-    expect(screen.getByLabelText("Playback test time")).toHaveTextContent("0.25");
+      act(() => callbacks.get(1)?.(1000));
+      act(() => callbacks.get(2)?.(1250));
+      expect(screen.getByLabelText("Playback test time")).toHaveTextContent("0.25");
 
-    await user.click(screen.getByRole("button", { name: "Pause" }));
-    expect(screen.getByRole("button", { name: "Play" })).toHaveAttribute("aria-pressed", "false");
+      await user.click(screen.getByRole("button", { name: "Pause" }));
+      expect(screen.getByRole("button", { name: "Play" })).toHaveAttribute("aria-pressed", "false");
 
-    await user.click(screen.getByRole("button", { name: "Restart" }));
-    expect(screen.getByLabelText("Playback test time")).toHaveTextContent("0.00");
+      await user.click(screen.getByRole("button", { name: "Restart" }));
+      expect(screen.getByLabelText("Playback test time")).toHaveTextContent("0.00");
+    } finally {
+      unmount();
+      vi.unstubAllGlobals();
+    }
   });
 });
