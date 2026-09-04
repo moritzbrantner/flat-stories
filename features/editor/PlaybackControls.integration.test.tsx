@@ -14,16 +14,21 @@ const clip: AnimationClip = {
   tracks: [],
 };
 
+function installRaf() {
+  const callbacks = new Map<number, FrameRequestCallback>();
+  let nextFrameId = 1;
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    const id = nextFrameId++;
+    callbacks.set(id, callback);
+    return id;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => callbacks.delete(id));
+  return callbacks;
+}
+
 describe("playback controls", () => {
   it("plays, pauses, advances the preview clock and restarts", async () => {
-    const callbacks = new Map<number, FrameRequestCallback>();
-    let nextFrameId = 1;
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      const id = nextFrameId++;
-      callbacks.set(id, callback);
-      return id;
-    });
-    vi.stubGlobal("cancelAnimationFrame", (id: number) => callbacks.delete(id));
+    const callbacks = installRaf();
 
     function Harness() {
       const [time, setTime] = useState(0);
@@ -50,6 +55,42 @@ describe("playback controls", () => {
 
       await user.click(screen.getByRole("button", { name: "Restart" }));
       expect(screen.getByLabelText("Playback test time")).toHaveTextContent("0.00");
+    } finally {
+      unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("loops inside an editor-only preview range and restarts at its start", async () => {
+    const callbacks = installRaf();
+
+    function Harness() {
+      const [time, setTime] = useState(1.4);
+      return <>
+        <PlaybackControls clip={clip} currentTime={time} onTimeChange={setTime} />
+        <output aria-label="Playback test time">{time.toFixed(2)}</output>
+      </>;
+    }
+
+    const user = userEvent.setup();
+    const { unmount } = render(<Harness />);
+    try {
+      await user.click(screen.getByLabelText("Loop preview range"));
+      await user.clear(screen.getByLabelText("Preview range start"));
+      await user.type(screen.getByLabelText("Preview range start"), "0.5");
+      await user.clear(screen.getByLabelText("Preview range end"));
+      await user.type(screen.getByLabelText("Preview range end"), "1.5");
+
+      await user.click(screen.getByRole("button", { name: "Play" }));
+      act(() => callbacks.get(1)?.(1000));
+      act(() => callbacks.get(2)?.(1300));
+      expect(screen.getByLabelText("Playback test time")).toHaveTextContent("0.70");
+
+      await user.click(screen.getByRole("button", { name: "Pause" }));
+      await user.click(screen.getByRole("button", { name: "Restart" }));
+      expect(screen.getByLabelText("Playback test time")).toHaveTextContent("0.50");
+      expect(clip.duration).toBe(2);
+      expect(clip.loop).toBe(false);
     } finally {
       unmount();
       vi.unstubAllGlobals();

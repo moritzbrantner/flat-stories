@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnimationClip } from "./model";
-import { advancePlaybackTime } from "./playback";
+import { advancePlaybackTime, normalizePlaybackRange } from "./playback";
 
 const clip = (overrides: Partial<AnimationClip> = {}): AnimationClip => ({
   id: "clip",
@@ -21,6 +21,23 @@ describe("playback", () => {
     const advanced = advancePlaybackTime(clip({ loop: true }), 1.8, 0.5);
     expect(advanced.time).toBeCloseTo(0.3);
     expect(advanced.finished).toBe(false);
+  });
+
+  it("loops inside a transient preview range without changing clip loop semantics", () => {
+    const once = clip({ loop: false });
+    const advanced = advancePlaybackTime(once, 1.4, 0.3, { start: 0.5, end: 1.5 });
+    expect(advanced.time).toBeCloseTo(0.7);
+    expect(advanced.finished).toBe(false);
+    expect(once.loop).toBe(false);
+  });
+
+  it("starts an out-of-range preview clock from the range start", () => {
+    expect(advancePlaybackTime(clip(), 0.1, 0.25, { start: 0.5, end: 1.5 })).toEqual({ time: 0.75, finished: false });
+  });
+
+  it("normalizes preview ranges to clip bounds and accepts reversed input", () => {
+    expect(normalizePlaybackRange(clip(), { start: 3, end: -1 })).toEqual({ start: 0, end: 2 });
+    expect(advancePlaybackTime(clip(), 1, 0.5, { start: 1, end: 1 })).toEqual({ time: 1, finished: true });
   });
 
   it("ignores negative time deltas and handles empty clips", () => {
