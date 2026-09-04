@@ -115,10 +115,10 @@ describe("Editor", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Animation clip" }), "hello");
     await user.selectOptions(screen.getByRole("combobox", { name: "Keyframe pose" }), screen.getByRole("option", { name: "Timeline pose" }));
     await user.click(screen.getByRole("button", { name: "Key pose" }));
-    expect(screen.getByText("node:caption · transform.x")).toBeInTheDocument();
+    expect(screen.getAllByText("node:caption · transform.x")).toHaveLength(2);
 
     await user.click(screen.getByRole("button", { name: "Remove keys at time" }));
-    expect(screen.queryByText("node:caption · transform.x")).not.toBeInTheDocument();
+    expect(screen.queryAllByText("node:caption · transform.x")).toHaveLength(0);
   });
 
   it("keeps grid snapping an explicit editor control", () => {
@@ -132,7 +132,7 @@ describe("Editor", () => {
     const clip = screen.getByRole("combobox", { name: "Animation clip" });
     expect(clip).toHaveValue("");
     await user.selectOptions(clip, "hello");
-    expect(screen.getByText(/bone:head/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Keyframe track")).toHaveValue("head-sway");
     expect(screen.getByText(/Animation preview is read-only/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rectangle" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Save pose" })).toBeDisabled();
