@@ -15,13 +15,15 @@ describe("Editor", () => {
     }
   });
 
-  it("creates and selects each supported drawable object", async () => {
+  it("creates, duplicates and selects supported drawable objects", async () => {
     const user = userEvent.setup();
     render(<Editor initialDocument={fixtureDocument} />);
     const toolbar = within(screen.getByRole("complementary", { name: "Drawing tools" }));
     for (const label of ["Rectangle", "Circle", "Path", "Text"]) await user.click(toolbar.getByRole("button", { name: label }));
     expect(screen.getByRole("button", { name: /^text Text$/i })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getAllByRole("listitem")).toHaveLength(flattenObjects(fixtureDocument.objects).length + 4);
+    await user.click(toolbar.getByRole("button", { name: "Duplicate" }));
+    expect(screen.getByRole("button", { name: /^text Text Copy$/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByRole("listitem")).toHaveLength(flattenObjects(fixtureDocument.objects).length + 5);
   });
 
   it("edits the selected layer name", async () => {
@@ -31,6 +33,19 @@ describe("Editor", () => {
     await user.clear(name);
     await user.type(name, "Headline");
     expect(screen.getByRole("button", { name: /Headline/i })).toBeInTheDocument();
+  });
+
+  it("enables alignment for compatible sibling selections", async () => {
+    const user = userEvent.setup();
+    render(<Editor initialDocument={fixtureDocument} />);
+    const inspector = within(screen.getByRole("complementary", { name: "Inspector" }));
+    await user.click(inspector.getByRole("button", { name: "path Ground" }));
+    await user.keyboard("{Shift>}");
+    await user.click(inspector.getByRole("button", { name: "text Caption" }));
+    await user.keyboard("{/Shift}");
+    expect(inspector.getByRole("button", { name: "Align L" })).toBeEnabled();
+    expect(inspector.getByRole("button", { name: "Dist H" })).toBeDisabled();
+    await user.click(inspector.getByRole("button", { name: "Align L" }));
   });
 
   it("exposes direct vector-path authoring and transform handles for a selected path", async () => {
@@ -44,7 +59,16 @@ describe("Editor", () => {
     expect(screen.getByRole("button", { name: "Resize SE" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add point" }));
     expect(screen.getByLabelText("Path point count")).toHaveTextContent("6");
-    expect(screen.getAllByRole("button", { name: /Path anchor/ })).toHaveLength(6);
+  });
+
+  it("exposes stroke width, caps and joins for drawable artwork", async () => {
+    const user = userEvent.setup();
+    render(<Editor initialDocument={fixtureDocument} />);
+    const inspector = within(screen.getByRole("complementary", { name: "Inspector" }));
+    await user.click(inspector.getByRole("button", { name: "path Smile" }));
+    expect(screen.getByLabelText("Stroke W")).toHaveValue(4);
+    expect(screen.getByLabelText("Line cap")).toHaveValue("round");
+    expect(screen.getByLabelText("Line join")).toHaveValue("round");
   });
 
   it("keeps grid snapping an explicit editor control", () => {

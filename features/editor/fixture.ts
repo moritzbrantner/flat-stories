@@ -112,6 +112,8 @@ export const fixtureDocument: EditorDocument = {
               fill: "none",
               stroke: "#8b4b42",
               strokeWidth: 4,
+              strokeLinecap: "round",
+              strokeLinejoin: "round",
             },
           ],
         },
