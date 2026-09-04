@@ -2,6 +2,7 @@ import type {
   CharacterExpression,
   CharacterPose,
   EditorDocument,
+  EditorObject,
   ExpressionNodeState,
   Transform,
 } from "./model";
@@ -66,7 +67,9 @@ export function applyExpression(document: EditorDocument, expression: CharacterE
   for (const [nodeId, state] of Object.entries(expression.nodes)) {
     if (!findObject(next.objects, nodeId)) continue;
     if (state.transform) next = patchObjectTransform(next, nodeId, state.transform);
-    const { transform: _transform, ...nodePatch } = state;
+    const nodePatch: Partial<EditorObject> = {};
+    if (state.visible !== undefined) nodePatch.visible = state.visible;
+    if (state.opacity !== undefined) nodePatch.opacity = state.opacity;
     if (Object.keys(nodePatch).length > 0) next = patchObject(next, nodeId, nodePatch);
   }
   return next;
