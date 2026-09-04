@@ -10,13 +10,28 @@ type PlaybackControlsProps = {
   onTimeChange: (time: number) => void;
 };
 
+function parseNumber(value: string) {
+  if (value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function PlaybackControls({ clip, currentTime, onTimeChange }: PlaybackControlsProps) {
   const [playing, setPlaying] = useState(false);
   const [previewRangeEnabled, setPreviewRangeEnabled] = useState(false);
-  const [rangeStart, setRangeStart] = useState(0);
-  const [rangeEnd, setRangeEnd] = useState(clip?.duration ?? 0);
+  const [rangeStartText, setRangeStartText] = useState("0");
+  const [rangeEndText, setRangeEndText] = useState(String(clip?.duration ?? 0));
   const timeRef = useRef(currentTime);
-  const validPreviewRange = !previewRangeEnabled || rangeEnd > rangeStart;
+  const rangeStart = parseNumber(rangeStartText);
+  const rangeEnd = parseNumber(rangeEndText);
+  const validPreviewRange = !previewRangeEnabled || Boolean(
+    clip
+    && rangeStart !== null
+    && rangeEnd !== null
+    && rangeStart >= 0
+    && rangeEnd <= clip.duration
+    && rangeEnd > rangeStart,
+  );
 
   useEffect(() => {
     timeRef.current = currentTime;
@@ -26,7 +41,7 @@ export function PlaybackControls({ clip, currentTime, onTimeChange }: PlaybackCo
     if (!playing || !clip) return;
     let frameId = 0;
     let previousTimestamp: number | null = null;
-    const previewRange: PlaybackRange | undefined = previewRangeEnabled
+    const previewRange: PlaybackRange | undefined = previewRangeEnabled && rangeStart !== null && rangeEnd !== null
       ? { start: rangeStart, end: rangeEnd }
       : undefined;
 
@@ -60,7 +75,7 @@ export function PlaybackControls({ clip, currentTime, onTimeChange }: PlaybackCo
       setPlaying(false);
       return;
     }
-    if (previewRangeEnabled && (currentTime < rangeStart || currentTime >= rangeEnd)) {
+    if (previewRangeEnabled && rangeStart !== null && rangeEnd !== null && (currentTime < rangeStart || currentTime >= rangeEnd)) {
       timeRef.current = rangeStart;
       onTimeChange(rangeStart);
     } else if (!previewRangeEnabled && !clip.loop && currentTime >= clip.duration) {
@@ -72,19 +87,25 @@ export function PlaybackControls({ clip, currentTime, onTimeChange }: PlaybackCo
 
   function restart() {
     setPlaying(false);
-    const restartTime = previewRangeEnabled && validPreviewRange ? rangeStart : 0;
+    const restartTime = previewRangeEnabled && validPreviewRange && rangeStart !== null ? rangeStart : 0;
     timeRef.current = restartTime;
     onTimeChange(restartTime);
   }
 
-  function updateRangeStart(value: number) {
+  function commitRangeStart() {
     if (!clip) return;
-    setRangeStart(Math.max(0, Math.min(rangeEnd, Math.min(clip.duration, value))));
+    const parsed = parseNumber(rangeStartText);
+    const currentEnd = parseNumber(rangeEndText) ?? clip.duration;
+    const normalized = Math.max(0, Math.min(currentEnd, Math.min(clip.duration, parsed ?? 0)));
+    setRangeStartText(String(normalized));
   }
 
-  function updateRangeEnd(value: number) {
+  function commitRangeEnd() {
     if (!clip) return;
-    setRangeEnd(Math.min(clip.duration, Math.max(rangeStart, Math.max(0, value))));
+    const parsed = parseNumber(rangeEndText);
+    const currentStart = parseNumber(rangeStartText) ?? 0;
+    const normalized = Math.min(clip.duration, Math.max(currentStart, Math.max(0, parsed ?? clip.duration)));
+    setRangeEndText(String(normalized));
   }
 
   return <div className="timeline-playback" aria-label="Playback controls">
@@ -98,9 +119,15 @@ export function PlaybackControls({ clip, currentTime, onTimeChange }: PlaybackCo
         setPlaying(false);
         setPreviewRangeEnabled(event.target.checked);
       }} /></label>
-    <label>Start<input aria-label="Preview range start" type="number" min={0} max={rangeEnd} step={0.01}
-      disabled={!clip || !previewRangeEnabled} value={rangeStart} onChange={(event) => updateRangeStart(Number(event.target.value))} /></label>
-    <label>End<input aria-label="Preview range end" type="number" min={rangeStart} max={clip?.duration ?? 0} step={0.01}
-      disabled={!clip || !previewRangeEnabled} value={rangeEnd} onChange={(event) => updateRangeEnd(Number(event.target.value))} /></label>
+    <label>Start<input aria-label="Preview range start" type="number" min={0} max={rangeEnd ?? clip?.duration ?? 0} step={0.01}
+      disabled={!clip || !previewRangeEnabled} value={rangeStartText} onChange={(event) => {
+        setPlaying(false);
+        setRangeStartText(event.target.value);
+      }} onBlur={commitRangeStart} /></label>
+    <label>End<input aria-label="Preview range end" type="number" min={rangeStart ?? 0} max={clip?.duration ?? 0} step={0.01}
+      disabled={!clip || !previewRangeEnabled} value={rangeEndText} onChange={(event) => {
+        setPlaying(false);
+        setRangeEndText(event.target.value);
+      }} onBlur={commitRangeEnd} /></label>
   </div>;
 }
