@@ -20,7 +20,7 @@ describe("project controls", () => {
 
       expect(createObjectURL).toHaveBeenCalledOnce();
       expect(click).toHaveBeenCalledOnce();
-      const anchor = click.mock.instances[0];
+      const anchor = click.mock.instances[0] as HTMLAnchorElement;
       expect(anchor.download).toBe("Nova character study.flatstories.json");
       expect(revokeObjectURL).toHaveBeenCalledWith("blob:project");
     } finally {
