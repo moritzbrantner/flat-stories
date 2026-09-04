@@ -6,6 +6,8 @@ export type FlatNode = {
   parentId: string | null;
 };
 
+export type LayerDirection = "forward" | "backward" | "front" | "back";
+
 export function flattenObjects(objects: readonly EditorObject[], depth = 0, parentId: string | null = null): FlatNode[] {
   const flattened: FlatNode[] = [];
   for (const node of objects) {
@@ -26,6 +28,26 @@ export function findObject(objects: readonly EditorObject[], id: string): Editor
   return null;
 }
 
+export function findParentId(objects: readonly EditorObject[], id: string, parentId: string | null = null): string | null | undefined {
+  for (const node of objects) {
+    if (node.id === id) return parentId;
+    if (node.kind === "group") {
+      const nested = findParentId(node.children, id, node.id);
+      if (nested !== undefined) return nested;
+    }
+  }
+  return undefined;
+}
+
+export function siblingObjects(document: EditorDocument, ids: readonly string[]): EditorObject[] | null {
+  if (ids.length === 0) return null;
+  const parentId = findParentId(document.objects, ids[0]);
+  if (parentId === undefined || ids.some((id) => findParentId(document.objects, id) !== parentId)) return null;
+  if (parentId === null) return document.objects;
+  const parent = findObject(document.objects, parentId);
+  return parent?.kind === "group" ? parent.children : null;
+}
+
 export function updateObject(objects: readonly EditorObject[], id: string, update: (node: EditorObject) => EditorObject): EditorObject[] {
   let changed = false;
   const next = objects.map((node) => {
@@ -35,6 +57,24 @@ export function updateObject(objects: readonly EditorObject[], id: string, updat
     }
     if (node.kind !== "group") return node;
     const children = updateObject(node.children, id, update);
+    if (children === node.children) return node;
+    changed = true;
+    return { ...node, children };
+  });
+  return changed ? next : (objects as EditorObject[]);
+}
+
+function updateSiblingCollection(objects: readonly EditorObject[], parentId: string | null, update: (siblings: readonly EditorObject[]) => EditorObject[]): EditorObject[] {
+  if (parentId === null) return update(objects);
+  let changed = false;
+  const next = objects.map((node) => {
+    if (node.kind !== "group") return node;
+    if (node.id === parentId) {
+      const children = update(node.children);
+      if (children !== node.children) changed = true;
+      return children === node.children ? node : { ...node, children };
+    }
+    const children = updateSiblingCollection(node.children, parentId, update);
     if (children === node.children) return node;
     changed = true;
     return { ...node, children };
@@ -84,6 +124,57 @@ export function ungroupRootObject(document: EditorDocument, groupId: string): Ed
   const next = [...document.objects];
   next.splice(index, 1, ...group.children);
   return { ...document, objects: next };
+}
+
+export function cloneObjectWithIds(object: EditorObject, createId: (kind: EditorObject["kind"]) => string): EditorObject {
+  const clone = (node: EditorObject, topLevel: boolean): EditorObject => {
+    const shared = { ...node, id: createId(node.kind), name: topLevel ? `${node.name} Copy` : node.name };
+    if (node.kind !== "group") return shared as EditorObject;
+    return { ...shared, kind: "group", children: node.children.map((child) => clone(child, false)) } as GroupObject;
+  };
+  return clone(object, true);
+}
+
+export function duplicateSiblingObjects(document: EditorDocument, ids: readonly string[], createId: (kind: EditorObject["kind"]) => string): { document: EditorDocument; duplicatedIds: string[] } {
+  const selected = new Set(ids);
+  if (selected.size === 0) return { document, duplicatedIds: [] };
+  const siblings = siblingObjects(document, ids);
+  if (!siblings) return { document, duplicatedIds: [] };
+  const parentId = findParentId(document.objects, ids[0]);
+  if (parentId === undefined) return { document, duplicatedIds: [] };
+  const duplicatedIds: string[] = [];
+  const objects = updateSiblingCollection(document.objects, parentId, (current) => {
+    const next: EditorObject[] = [];
+    for (const node of current) {
+      next.push(node);
+      if (!selected.has(node.id)) continue;
+      const copy = cloneObjectWithIds(node, createId);
+      duplicatedIds.push(copy.id);
+      next.push(copy);
+    }
+    return next;
+  });
+  return duplicatedIds.length === 0 ? { document, duplicatedIds } : { document: { ...document, objects }, duplicatedIds };
+}
+
+export function reorderObject(document: EditorDocument, id: string, direction: LayerDirection): EditorDocument {
+  const parentId = findParentId(document.objects, id);
+  if (parentId === undefined) return document;
+  const objects = updateSiblingCollection(document.objects, parentId, (siblings) => {
+    const index = siblings.findIndex((node) => node.id === id);
+    if (index < 0) return siblings as EditorObject[];
+    let target = index;
+    if (direction === "forward") target = Math.min(siblings.length - 1, index + 1);
+    else if (direction === "backward") target = Math.max(0, index - 1);
+    else if (direction === "front") target = siblings.length - 1;
+    else target = 0;
+    if (target === index) return siblings as EditorObject[];
+    const next = [...siblings];
+    const [node] = next.splice(index, 1);
+    next.splice(target, 0, node);
+    return next;
+  });
+  return objects === document.objects ? document : { ...document, objects };
 }
 
 export function resetObjectTransform(document: EditorDocument, id: string): EditorDocument {

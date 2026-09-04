@@ -36,10 +36,15 @@ type NodeBase = {
   boneId?: string;
 };
 
+export type StrokeLinecap = "butt" | "round" | "square";
+export type StrokeLinejoin = "miter" | "round" | "bevel";
+
 type PaintStyle = {
   fill: string;
   stroke?: string;
   strokeWidth?: number;
+  strokeLinecap?: StrokeLinecap;
+  strokeLinejoin?: StrokeLinejoin;
 };
 
 export type RectangleObject = NodeBase & PaintStyle & {
