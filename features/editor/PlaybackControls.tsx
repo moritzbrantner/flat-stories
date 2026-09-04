@@ -13,7 +13,10 @@ type PlaybackControlsProps = {
 export function PlaybackControls({ clip, currentTime, onTimeChange }: PlaybackControlsProps) {
   const [playing, setPlaying] = useState(false);
   const timeRef = useRef(currentTime);
-  timeRef.current = currentTime;
+
+  useEffect(() => {
+    timeRef.current = currentTime;
+  }, [currentTime]);
 
   useEffect(() => {
     if (!playing || !clip) return;
