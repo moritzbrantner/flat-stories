@@ -54,6 +54,9 @@ export function PropertyKeyControls({ selectedNode, rig, clipSelected, currentTi
   const sourceValue = isNode && selectedNode && selectedNode.id === targetId
     ? nodePropertyValue(selectedNode, activeProperty as NodeAnimationProperty)
     : rig?.bones.find((bone) => bone.id === targetId)?.rotation ?? 0;
+  const activeTarget: AnimationTrack["target"] = isNode
+    ? { kind: "node", id: targetId }
+    : { kind: "bone", id: targetId };
 
   return <fieldset className="timeline-property-key" disabled={!clipSelected || !activeTargetKey}>
     <select aria-label="Property target" value={activeTargetKey} onChange={(event) => {
@@ -67,12 +70,7 @@ export function PropertyKeyControls({ selectedNode, rig, clipSelected, currentTi
     </select>
     <PropertyValueEditor key={`${activeTargetKey}:${activeProperty}:${currentTime}:${sourceValue}`}
       value={sourceValue}
-      onKey={(value, easing) => onKey(
-        { kind: isNode ? "node" : "bone", id: targetId },
-        activeProperty,
-        value,
-        easing,
-      )} />
+      onKey={(value, easing) => onKey(activeTarget, activeProperty, value, easing)} />
   </fieldset>;
 }
 
