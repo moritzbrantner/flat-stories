@@ -9,6 +9,8 @@ import { KeyframeInspector } from "./KeyframeInspector";
 import { alignObjects, canArrangeSelection, distributeObjects, type Alignment, type Distribution } from "./layout";
 import type { AnimationTrack, CharacterRig, DrawableObject, Easing, EditorDocument, EditorObject, GroupObject, NumberKeyframe, Point, StrokeLinecap, StrokeLinejoin, Transform, VectorPath } from "./model";
 import { createObject, type CreatableObjectKind } from "./objectFactory";
+import { getOnionSkinTimes } from "./onionSkin";
+import { OnionSkinControls } from "./OnionSkinControls";
 import { PathEditorOverlay } from "./PathEditorOverlay";
 import { PlaybackControls } from "./PlaybackControls";
 import { applyCharacterPose, applyExpression, captureCharacterPose, captureExpression, upsertExpression, upsertPose } from "./poses";
@@ -42,6 +44,12 @@ type Viewport = Point & { zoom: number };
 type DragState = { id: string; pointer: Point; transform: Transform; basisRotation: number };
 type PathHandle = "inHandle" | "outHandle";
 
+type OnionSkinFrame = {
+  kind: "previous" | "next";
+  time: number;
+  document: EditorDocument;
+};
+
 const GRID_STEP = 10;
 const tools: { kind: CreatableObjectKind; label: string }[] = [
   { kind: "rectangle", label: "Rectangle" },
@@ -66,6 +74,8 @@ export function Editor({ initialDocument }: EditorProps) {
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [clipId, setClipId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [onionSkinEnabled, setOnionSkinEnabled] = useState(false);
+  const [onionSkinOffset, setOnionSkinOffset] = useState(0.1);
   const panStart = useRef<{ pointer: Point; viewport: Point } | null>(null);
   const objectDrag = useRef<DragState | null>(null);
   const idCounter = useRef(0);
@@ -76,6 +86,14 @@ export function Editor({ initialDocument }: EditorProps) {
   const selectedClip = document.animations.find((clip) => clip.id === clipId) ?? null;
   const displayDocument = useMemo(() => sampleAnimation(document, clipId, currentTime), [document, clipId, currentTime]);
   const displaySelected = selectedId ? findObject(displayDocument.objects, selectedId) : null;
+  const onionSkinFrames = useMemo<OnionSkinFrame[]>(() => {
+    if (!onionSkinEnabled || !selectedClip || !clipId) return [];
+    const times = getOnionSkinTimes(selectedClip, currentTime, onionSkinOffset);
+    const frames: OnionSkinFrame[] = [];
+    if (times.previous !== null) frames.push({ kind: "previous", time: times.previous, document: sampleAnimation(document, clipId, times.previous) });
+    if (times.next !== null) frames.push({ kind: "next", time: times.next, document: sampleAnimation(document, clipId, times.next) });
+    return frames;
+  }, [clipId, currentTime, document, onionSkinEnabled, onionSkinOffset, selectedClip]);
   const rootIds = useMemo(() => new Set(document.objects.map((object) => object.id)), [document.objects]);
   const canGroup = selectedIds.length > 1 && selectedIds.every((id) => rootIds.has(id));
   const canUngroup = selectedIds.length === 1 && rootIds.has(selectedIds[0]) && selected?.kind === "group";
@@ -339,6 +357,25 @@ export function Editor({ initialDocument }: EditorProps) {
         viewBox={`0 0 ${document.width} ${document.height}`}
         style={{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})` }}
         onPointerDown={(event) => { if (event.target === event.currentTarget) setSelectedIds([]); }}>
+        {onionSkinFrames.map((frame) => <g key={`${frame.kind}:${frame.time}`} data-onion-skin={frame.kind} data-sample-time={frame.time}
+          aria-hidden="true" pointerEvents="none" opacity={frame.kind === "previous" ? 0.18 : 0.12}>
+          {frame.document.objects.map((object) => <ObjectView
+            key={object.id}
+            object={object}
+            rig={frame.document.rig}
+            selectedIds={[]}
+            inheritedSelection={false}
+            editingEnabled={false}
+            onPointerDown={startObjectDrag}
+            onPointerMove={moveObjectDrag}
+            onPointerUp={endObjectDrag}
+            onDrawableChange={replaceDrawable}
+            onRotationChange={(id, rotation) => setDocument((current) => patchObjectTransform(current, id, { rotation }))}
+            onPathAnchorMove={(pathId, anchorId, point) => updatePath(pathId, (path) => movePathAnchor(path, anchorId, point))}
+            onPathHandleMove={(pathId, anchorId, handle, point) => updatePath(pathId, (path) => updatePathHandle(path, anchorId, handle, point))}
+            onPathToggleHandles={(pathId, anchorId) => updatePath(pathId, (path) => togglePathHandles(path, anchorId))}
+          />)}
+        </g>)}
         {displayDocument.objects.map((object) => <ObjectView
           key={object.id}
           object={object}
@@ -424,6 +461,8 @@ export function Editor({ initialDocument }: EditorProps) {
         <output>{currentTime.toFixed(2)}s{selectedClip ? ` / ${selectedClip.duration.toFixed(2)}s` : ""}</output>
       </div>
       <PlaybackControls key={selectedClip?.id ?? "rest"} clip={selectedClip} currentTime={currentTime} onTimeChange={setCurrentTime} />
+      <OnionSkinControls enabled={onionSkinEnabled} offsetSeconds={onionSkinOffset} clipSelected={Boolean(selectedClip)}
+        onEnabledChange={setOnionSkinEnabled} onOffsetChange={setOnionSkinOffset} />
       <TimelinePoseControls poses={document.poses ?? []} clipSelected={Boolean(selectedClip)}
         onKeyPose={keyPoseAtCurrentTime} onRemoveKeysAtTime={removeKeysAtCurrentTime} />
       <PropertyKeyControls selectedNode={displaySelected} rig={displayDocument.rig} clipSelected={Boolean(selectedClip)} currentTime={currentTime}
