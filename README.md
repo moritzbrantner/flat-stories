@@ -25,7 +25,7 @@ The bundled `Nova character study` fixture dogfoods the model with nested artwor
 
 React owns browser input, transient interaction state, panels, selection UI, timeline UI, and SVG DOM rendering. `features/editor/engine.ts` remains the small computational seam for workloads that may later justify Rust/WASM. The serialized document model stays plain data.
 
-Flat Stories owns SVG/character vocabulary: scene nodes, paint, character, rig, IK constraints, poses, animation clips, and SVG interchange. Generic editor mechanics such as reusable command/history/persistence infrastructure belong in `editor-core`; they should be adopted through its stable package/source boundary rather than copied into this repository.
+Flat Stories owns SVG/character vocabulary: scene nodes, paint, character, rig, IK constraints, poses, animation clips, and SVG interchange. Generic editor mechanics such as reusable command/history infrastructure belong in `editor-core`; project-file versioning and validation stay in Flat Stories because they encode this product's character/SVG document vocabulary.
 
 Rust/WASM is still workload-driven. Do not move the React state tree, DOM rendering, or pointer handling into Rust. Geometry kernels such as path booleans, path normalization, hit-testing, or deformation may move behind `EditorEngine` once profiling shows a concrete reason.
 
@@ -40,12 +40,17 @@ Keep implementation in small independently verifiable slices. The current horizo
 5. **Complete — playback controls:** deterministic play/pause progression, restart, and authored clip-loop behavior without changing animation data.
 6. **Complete — editable preview loop ranges:** enable a transient playback-only start/end range without changing duration, loop metadata, tracks, or keyframes.
 7. **Complete — onion skinning:** sample previous/next animation times and render those documents as translucent, pointer-disabled SVG context through the same scene renderer.
-8. **Now — deterministic static SVG export:** serialize the current canonical/sampled visual document to standalone SVG with stable ordering, supported paint/transforms/rig attachments, and no editor overlays or metadata.
-9. **Next — project persistence:** deterministic project JSON save/load using the canonical serializable document model.
-10. **Then — static SVG import:** parse the supported SVG subset back into the canonical scene graph with explicit unsupported-feature handling.
-11. **After — animated SVG export:** encode the supported numeric animation subset into self-contained SVG animation.
+8. **Complete — deterministic static SVG export:** serialize the current canonical/sampled visual document to standalone SVG with stable ordering, supported paint/transforms/rig attachments, and no editor overlays or metadata.
+9. **Now — project persistence foundation:** versioned deterministic `.flatstories.json` serialization/parsing with strict v1 model validation plus reusable browser Save/Load controls.
+10. **Next — editor load integration:** wire validated project loads into Editor state and reset selection/animation/onion-skin transient state without modifying imported authored data.
+11. **Then — static SVG import:** parse the supported SVG subset back into the canonical scene graph with explicit unsupported-feature handling.
+12. **After — animated SVG export:** encode the supported numeric animation subset into self-contained SVG animation.
 
 Do not pull later-horizon concerns into an earlier slice unless a concrete blocker proves the boundary wrong.
+
+## Project file boundary
+
+Project persistence uses a small versioned envelope (`format: "flat-stories"`, `version: 1`) around the canonical editor document. Version-one loading validates the complete currently supported scene, rig, pose/expression, and animation vocabulary and rejects unknown v1 fields instead of silently accepting data with unclear semantics. Serialization canonicalizes object-key ordering while preserving semantic array ordering such as layers, children, bones, tracks, and keyframes.
 
 ## Roadmap
 
@@ -55,14 +60,14 @@ Do not pull later-horizon concerns into an earlier slice unless a concrete block
 4. **Poses and expressions** — named reusable character poses and facial-expression states. The deterministic model and first authoring controls are present.
 5. **Animation timeline** — editable tracks/keyframes, easing curves, playback, onion skinning, copy/paste and loop regions. The typed clip model, scrub preview, deterministic pose-keying operations, pose-keyframing controls, direct existing-keyframe inspector, individual property keying, deterministic playback, transient preview loop ranges, and neighboring-frame onion skins are present.
 6. **Character animation workflows** — reusable blink/idle/wave/walk/talk clips, pose keyframes, mirroring and character instances.
-7. **SVG persistence/interchange** — deterministic project JSON, supported SVG import/export, then self-contained animated SVG export for supported tracks. Static SVG export is the current slice.
+7. **SVG persistence/interchange** — deterministic project JSON, supported SVG import/export, then self-contained animated SVG export for supported tracks. Static SVG export is complete; project-file persistence is underway.
 8. **Dogfood a complete original mascot** — build and animate a production-scale character entirely in Flat Stories and turn friction into focused follow-ups.
 9. **Advanced deformation only when justified** — path morphing, two-dimensional deformation, mesh skinning, motion paths, richer IK and secondary motion.
 
 ## Editing versus preview
 
-The rest pose is the authored editing state. Selecting an animation clip switches the canvas into a read-only sampled preview so direct geometry edits cannot accidentally bake sampled animation values back into the source document. Timeline authoring can still write explicit animation data while previewing; playback, preview ranges, and onion skins only affect transient editor presentation. Static SVG export serializes the current visual document only, excluding editor overlays. Return to `Rest pose` before changing artwork, transforms, paths, rig constraints, poses, or expressions.
+The rest pose is the authored editing state. Selecting an animation clip switches the canvas into a read-only sampled preview so direct geometry edits cannot accidentally bake sampled animation values back into the source document. Timeline authoring can still write explicit animation data while previewing; playback, preview ranges, and onion skins only affect transient editor presentation. Static SVG export serializes the current visual document only, excluding editor overlays. Project save/load serializes authored document state, not transient preview state.
 
 ## Current verification focus
 
-Pure scene-graph, vector-path, geometry, snapping, animation, animation-authoring, playback/range, onion-skin timing, SVG export, pose/expression, and rig math are deterministic and covered independently from React. Browser integration tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, pose/expression authoring, pose keyframing, direct keyframe editing, individual property keying, playback controls, preview loop ranges, pointer-disabled onion skins, static SVG export entry points, animation-preview isolation, rig controls, and timeline entry points.
+Pure scene-graph, vector-path, geometry, snapping, animation, animation-authoring, playback/range, onion-skin timing, SVG export, project serialization/validation, pose/expression, and rig math are deterministic and covered independently from React. Browser-focused tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, pose/expression authoring, pose keyframing, direct keyframe editing, individual property keying, playback controls, preview loop ranges, pointer-disabled onion skins, SVG/project persistence controls, animation-preview isolation, rig controls, and timeline entry points.
