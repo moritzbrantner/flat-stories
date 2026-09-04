@@ -39,10 +39,11 @@ Keep implementation in small independently verifiable slices. The current horizo
 4. **Complete — individual property keying:** key one selected node property or rig-bone rotation at the current timeline time without requiring a whole saved pose; reuse existing logical tracks when present.
 5. **Complete — playback controls:** deterministic play/pause progression, restart, and authored clip-loop behavior without changing animation data.
 6. **Complete — editable preview loop ranges:** enable a transient playback-only start/end range without changing duration, loop metadata, tracks, or keyframes.
-7. **Now — onion skinning:** sample previous/next animation times and render those documents as translucent, pointer-disabled SVG context through the same scene renderer.
-8. **Next — deterministic static SVG export:** export the authored rest pose to standalone SVG with stable ordering and supported styling.
-9. **Then — project persistence:** deterministic project JSON save/load using the canonical serializable document model.
-10. **After — animated SVG export:** encode the supported numeric animation subset into self-contained SVG animation.
+7. **Complete — onion skinning:** sample previous/next animation times and render those documents as translucent, pointer-disabled SVG context through the same scene renderer.
+8. **Now — deterministic static SVG export:** serialize the current canonical/sampled visual document to standalone SVG with stable ordering, supported paint/transforms/rig attachments, and no editor overlays or metadata.
+9. **Next — project persistence:** deterministic project JSON save/load using the canonical serializable document model.
+10. **Then — static SVG import:** parse the supported SVG subset back into the canonical scene graph with explicit unsupported-feature handling.
+11. **After — animated SVG export:** encode the supported numeric animation subset into self-contained SVG animation.
 
 Do not pull later-horizon concerns into an earlier slice unless a concrete blocker proves the boundary wrong.
 
@@ -54,14 +55,14 @@ Do not pull later-horizon concerns into an earlier slice unless a concrete block
 4. **Poses and expressions** — named reusable character poses and facial-expression states. The deterministic model and first authoring controls are present.
 5. **Animation timeline** — editable tracks/keyframes, easing curves, playback, onion skinning, copy/paste and loop regions. The typed clip model, scrub preview, deterministic pose-keying operations, pose-keyframing controls, direct existing-keyframe inspector, individual property keying, deterministic playback, transient preview loop ranges, and neighboring-frame onion skins are present.
 6. **Character animation workflows** — reusable blink/idle/wave/walk/talk clips, pose keyframes, mirroring and character instances.
-7. **SVG persistence/interchange** — deterministic project JSON, supported SVG import/export, then self-contained animated SVG export for supported tracks.
+7. **SVG persistence/interchange** — deterministic project JSON, supported SVG import/export, then self-contained animated SVG export for supported tracks. Static SVG export is the current slice.
 8. **Dogfood a complete original mascot** — build and animate a production-scale character entirely in Flat Stories and turn friction into focused follow-ups.
 9. **Advanced deformation only when justified** — path morphing, two-dimensional deformation, mesh skinning, motion paths, richer IK and secondary motion.
 
 ## Editing versus preview
 
-The rest pose is the authored editing state. Selecting an animation clip switches the canvas into a read-only sampled preview so direct geometry edits cannot accidentally bake sampled animation values back into the source document. Timeline authoring can still write explicit animation data while previewing; playback, preview ranges, and onion skins only affect transient editor presentation. Return to `Rest pose` before changing artwork, transforms, paths, rig constraints, poses, or expressions.
+The rest pose is the authored editing state. Selecting an animation clip switches the canvas into a read-only sampled preview so direct geometry edits cannot accidentally bake sampled animation values back into the source document. Timeline authoring can still write explicit animation data while previewing; playback, preview ranges, and onion skins only affect transient editor presentation. Static SVG export serializes the current visual document only, excluding editor overlays. Return to `Rest pose` before changing artwork, transforms, paths, rig constraints, poses, or expressions.
 
 ## Current verification focus
 
-Pure scene-graph, vector-path, geometry, snapping, animation, animation-authoring, playback/range, onion-skin timing, pose/expression, and rig math are deterministic and covered independently from React. Browser integration tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, pose/expression authoring, pose keyframing, direct keyframe editing, individual property keying, playback controls, preview loop ranges, pointer-disabled onion skins, animation-preview isolation, rig controls, and timeline entry points.
+Pure scene-graph, vector-path, geometry, snapping, animation, animation-authoring, playback/range, onion-skin timing, SVG export, pose/expression, and rig math are deterministic and covered independently from React. Browser integration tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, pose/expression authoring, pose keyframing, direct keyframe editing, individual property keying, playback controls, preview loop ranges, pointer-disabled onion skins, static SVG export entry points, animation-preview isolation, rig controls, and timeline entry points.

@@ -35,6 +35,7 @@ import {
   updateConstraintTarget,
 } from "./rig";
 import { snapValue } from "./snapping";
+import { SvgExportButton } from "./SvgExportButton";
 import { TimelinePoseControls } from "./TimelinePoseControls";
 import { TransformOverlay } from "./TransformOverlay";
 import { appendPathAnchor, mirrorPath, movePathAnchor, pathToSvg, togglePathHandles, updatePathHandle } from "./vectorPath";
@@ -324,6 +325,7 @@ export function Editor({ initialDocument }: EditorProps) {
       <div className="topbar-actions">
         <button type="button" aria-pressed={snapToGrid} onClick={() => setSnapToGrid((current) => !current)}>Snap 10</button>
         <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>
+        <SvgExportButton document={displayDocument} />
         <output>{Math.round(viewport.zoom * 100)}%</output>
       </div>
     </header>
