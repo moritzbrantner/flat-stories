@@ -29,13 +29,24 @@ Flat Stories owns SVG/character vocabulary: scene nodes, paint, character, rig, 
 
 Rust/WASM is still workload-driven. Do not move the React state tree, DOM rendering, or pointer handling into Rust. Geometry kernels such as path booleans, path normalization, hit-testing, or deformation may move behind `EditorEngine` once profiling shows a concrete reason.
 
+## Implementation horizon
+
+Keep implementation in small independently verifiable slices. The current horizon is:
+
+1. **Now — pose/expression authoring UI:** capture and apply named poses from the rest pose; capture expressions from selected character layers.
+2. **Next — pose-to-keyframe controls:** expose the existing deterministic pose-keying operations in the timeline without broadening the track model.
+3. **Then — editable timeline:** direct keyframe add/remove/move, track inspection, easing controls, playback, and loop editing.
+4. **After — deterministic SVG export:** static SVG first, then self-contained animated SVG for the supported animation subset.
+
+Do not pull later-horizon concerns into an earlier slice unless a concrete blocker proves the boundary wrong.
+
 ## Roadmap
 
 1. **Character-ready scene graph** — hierarchical nodes, transforms, grouping, multi-selection, direct manipulation, character fixture. **Complete.**
 2. **Vector drawing** — editor-native Bézier anchors/handles, exact curve bounds, on-canvas node editing, grid snapping, resize/rotate handles and keyboard precision controls are underway; alignment/distribution, layer reorder, duplication and mature path operations remain.
 3. **Skeleton and rigging** — bone editing, attachment workflow, pivots, joint limits, FK and two-bone IK. The data model and solver are present; authoring UX comes next.
-4. **Poses and expressions** — named reusable character poses and facial-expression states.
-5. **Animation timeline** — editable tracks/keyframes, easing curves, playback, onion skinning, copy/paste and loop regions. The typed clip model and scrub preview are present.
+4. **Poses and expressions** — named reusable character poses and facial-expression states. The deterministic data model is present; authoring controls are the current slice.
+5. **Animation timeline** — editable tracks/keyframes, easing curves, playback, onion skinning, copy/paste and loop regions. The typed clip model, scrub preview, and deterministic pose-keying operations are present.
 6. **Character animation workflows** — reusable blink/idle/wave/walk/talk clips, pose keyframes, mirroring and character instances.
 7. **SVG persistence/interchange** — deterministic project JSON, supported SVG import/export, then self-contained animated SVG export for supported tracks.
 8. **Dogfood a complete original mascot** — build and animate a production-scale character entirely in Flat Stories and turn friction into focused follow-ups.
@@ -43,8 +54,8 @@ Rust/WASM is still workload-driven. Do not move the React state tree, DOM render
 
 ## Editing versus preview
 
-The rest pose is the authored editing state. Selecting an animation clip switches the canvas into a read-only sampled preview so direct geometry edits cannot accidentally bake sampled animation values back into the source document. Return to `Rest pose` before changing artwork, transforms, paths, or rig constraints.
+The rest pose is the authored editing state. Selecting an animation clip switches the canvas into a read-only sampled preview so direct geometry edits cannot accidentally bake sampled animation values back into the source document. Return to `Rest pose` before changing artwork, transforms, paths, rig constraints, poses, or expressions.
 
 ## Current verification focus
 
-Pure scene-graph, vector-path, geometry, snapping, animation, and rig math are deterministic and covered independently from React. Browser integration tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, animation-preview isolation, rig controls, and timeline entry points.
+Pure scene-graph, vector-path, geometry, snapping, animation, pose/expression, and rig math are deterministic and covered independently from React. Browser integration tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, pose/expression authoring, animation-preview isolation, rig controls, and timeline entry points.
