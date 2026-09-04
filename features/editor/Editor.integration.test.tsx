@@ -79,7 +79,7 @@ describe("Editor", () => {
     await user.type(x, "25");
     await user.type(screen.getByLabelText("Pose name"), "Caption offset");
     await user.click(screen.getByRole("button", { name: "Save pose" }));
-    expect(screen.getByText("Caption offset")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply pose Caption offset" })).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText("X"));
     await user.type(screen.getByLabelText("X"), "80");
