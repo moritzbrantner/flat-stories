@@ -71,6 +71,40 @@ describe("Editor", () => {
     expect(screen.getByLabelText("Line join")).toHaveValue("round");
   });
 
+  it("captures and reapplies named character poses", async () => {
+    const user = userEvent.setup();
+    render(<Editor initialDocument={fixtureDocument} />);
+    const x = screen.getByLabelText("X");
+    await user.clear(x);
+    await user.type(x, "25");
+    await user.type(screen.getByLabelText("Pose name"), "Caption offset");
+    await user.click(screen.getByRole("button", { name: "Save pose" }));
+    expect(screen.getByText("Caption offset")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("X"));
+    await user.type(screen.getByLabelText("X"), "80");
+    await user.click(screen.getByRole("button", { name: "Apply pose Caption offset" }));
+    expect(screen.getByLabelText("X")).toHaveValue(25);
+  });
+
+  it("captures expressions from only the selected character layers", async () => {
+    const user = userEvent.setup();
+    render(<Editor initialDocument={fixtureDocument} />);
+    const inspector = within(screen.getByRole("complementary", { name: "Inspector" }));
+    await user.click(inspector.getByRole("button", { name: "circle Eye L" }));
+
+    await user.clear(screen.getByLabelText("Opacity"));
+    await user.type(screen.getByLabelText("Opacity"), "0.25");
+    await user.type(screen.getByLabelText("Expression name"), "Left blink");
+    await user.click(screen.getByRole("button", { name: "Save expression" }));
+    expect(screen.getByText("Left blink")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Opacity"));
+    await user.type(screen.getByLabelText("Opacity"), "1");
+    await user.click(screen.getByRole("button", { name: "Apply expression Left blink" }));
+    expect(screen.getByLabelText("Opacity")).toHaveValue(0.25);
+  });
+
   it("keeps grid snapping an explicit editor control", () => {
     render(<Editor initialDocument={fixtureDocument} />);
     expect(screen.getByRole("button", { name: "Snap 10" })).toHaveAttribute("aria-pressed", "true");
@@ -85,6 +119,7 @@ describe("Editor", () => {
     expect(screen.getByText(/bone:head/)).toBeInTheDocument();
     expect(screen.getByText(/Animation preview is read-only/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rectangle" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save pose" })).toBeDisabled();
     await user.selectOptions(clip, "");
     expect(screen.queryByText(/Animation preview is read-only/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rectangle" })).toBeEnabled();
