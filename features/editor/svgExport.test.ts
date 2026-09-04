@@ -10,7 +10,7 @@ describe("static SVG export", () => {
     const second = exportDocumentToSvg(fixtureDocument);
 
     expect(second).toBe(first);
-    expect(first).toStartWith('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600">');
+    expect(first.startsWith('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600">')).toBe(true);
     expect(first).toContain("<title>Nova character study</title>");
     expect(first.indexOf('id="background"')).toBeLessThan(first.indexOf('id="ground"'));
     expect(first.indexOf('id="ground"')).toBeLessThan(first.indexOf('id="nova"'));
