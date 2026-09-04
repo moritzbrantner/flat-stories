@@ -1,4 +1,4 @@
-import { createIdentityTransform, type DrawableObject, type Transform, type VectorPath } from "./model";
+import { createIdentityTransform, type DrawableObject, type PathObject, type Point, type Transform, type VectorPath } from "./model";
 
 export type CreatableObjectKind = DrawableObject["kind"];
 
@@ -26,6 +26,22 @@ function trianglePath(id: string): VectorPath {
       { id: `${id}-a2`, point: { x: 400, y: 180 } },
       { id: `${id}-a3`, point: { x: 520, y: 330 } },
     ],
+  };
+}
+
+export function createPathAtPoint(id: string, point: Point, anchorId = `${id}-a1`): PathObject {
+  const base = common(id, "path");
+  return {
+    ...base,
+    kind: "path",
+    name: "Path",
+    fill: "none",
+    stroke: "#2563eb",
+    strokeWidth: 4,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    transform: withPivot(base.transform, point.x, point.y),
+    path: { closed: false, anchors: [{ id: anchorId, point }] },
   };
 }
 

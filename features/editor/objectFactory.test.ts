@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createObject, type CreatableObjectKind } from "./objectFactory";
+import { createObject, createPathAtPoint, type CreatableObjectKind } from "./objectFactory";
 import { pathToSvg } from "./vectorPath";
 
 const kinds: CreatableObjectKind[] = ["rectangle", "circle", "path", "text"];
@@ -8,16 +8,7 @@ describe("createObject", () => {
   it("preserves caller ids and shared scene-node defaults", () => {
     for (const kind of kinds) {
       const object = createObject(kind, `id-${kind}`);
-      expect(object).toMatchObject({
-        id: `id-${kind}`,
-        kind,
-        name: `${kind[0].toUpperCase()}${kind.slice(1)}`,
-        fill: "#2563eb",
-        opacity: 1,
-        visible: true,
-        locked: false,
-        transform: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 },
-      });
+      expect(object).toMatchObject({ id: `id-${kind}`, kind, name: `${kind[0].toUpperCase()}${kind.slice(1)}`, fill: "#2563eb", opacity: 1, visible: true, locked: false, transform: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 } });
     }
   });
 
@@ -30,6 +21,12 @@ describe("createObject", () => {
     expect(pathToSvg(path.path)).toBe("M280 330 L400 180 L520 330 Z");
     expect(path.transform).toMatchObject({ pivotX: 400, pivotY: 255 });
     expect(createObject("text", "t")).toMatchObject({ kind: "text", x: 300, y: 260, value: "New text", fontSize: 36, transform: { pivotX: 385, pivotY: 245 } });
+  });
+
+  it("creates open pen paths at the authored point", () => {
+    const path = createPathAtPoint("pen", { x: 120, y: 80 }, "anchor-1");
+    expect(path).toMatchObject({ kind: "path", fill: "none", stroke: "#2563eb", strokeWidth: 4, strokeLinecap: "round", strokeLinejoin: "round", transform: { pivotX: 120, pivotY: 80 } });
+    expect(path.path).toEqual({ closed: false, anchors: [{ id: "anchor-1", point: { x: 120, y: 80 } }] });
   });
 
   it("creates independent transforms on repeated calls", () => {
