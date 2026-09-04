@@ -9,8 +9,9 @@ import { flattenObjects } from "./sceneGraph";
 describe("Editor", () => {
   it("renders every fixture node in the hierarchical layers panel", () => {
     render(<Editor initialDocument={fixtureDocument} />);
+    const inspector = within(screen.getByRole("complementary", { name: "Inspector" }));
     for (const { node } of flattenObjects(fixtureDocument.objects)) {
-      expect(screen.getByRole("button", { name: new RegExp(node.name, "i") })).toBeInTheDocument();
+      expect(inspector.getByRole("button", { name: `${node.kind} ${node.name}` })).toBeInTheDocument();
     }
   });
 

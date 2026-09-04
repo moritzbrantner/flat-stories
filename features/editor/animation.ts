@@ -9,6 +9,8 @@ import type {
 } from "./model";
 import { patchObject, patchObjectTransform } from "./sceneGraph";
 
+const TIME_PRECISION = 1_000_000_000;
+
 function ease(progress: number, easing: Easing | undefined) {
   switch (easing) {
     case "ease-in": return progress * progress;
@@ -36,11 +38,15 @@ export function sampleKeyframes(keyframes: readonly NumberKeyframe[], time: numb
   return last.value;
 }
 
+function quantizeTime(time: number) {
+  return Math.round(time * TIME_PRECISION) / TIME_PRECISION;
+}
+
 function normalizedClipTime(clip: AnimationClip, time: number) {
   if (clip.duration <= 0) return 0;
-  if (!clip.loop) return Math.max(0, Math.min(clip.duration, time));
-  const looped = time % clip.duration;
-  return looped < 0 ? looped + clip.duration : looped;
+  if (!clip.loop) return quantizeTime(Math.max(0, Math.min(clip.duration, time)));
+  const looped = ((time % clip.duration) + clip.duration) % clip.duration;
+  return quantizeTime(looped);
 }
 
 function applyNodeTrack(document: EditorDocument, track: NodeAnimationTrack, value: number): EditorDocument {

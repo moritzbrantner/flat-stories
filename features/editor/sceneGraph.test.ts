@@ -17,12 +17,12 @@ describe("scene graph", () => {
     expect(findObject(fixtureDocument.objects, "eye-left")?.transform.x).toBe(0);
   });
 
-  it("groups and ungroups root nodes while preserving their order", () => {
-    const grouped = groupRootObjects(fixtureDocument, ["ground", "caption"], "group-test");
+  it("groups and ungroups a contiguous root slice without order drift", () => {
+    const grouped = groupRootObjects(fixtureDocument, ["ground", "nova"], "group-test");
     const group = grouped.objects.find((node) => node.id === "group-test");
     expect(group?.kind).toBe("group");
     if (group?.kind !== "group") throw new Error("group not created");
-    expect(group.children.map((node) => node.id)).toEqual(["ground", "caption"]);
+    expect(group.children.map((node) => node.id)).toEqual(["ground", "nova"]);
     const ungrouped = ungroupRootObject(grouped, "group-test");
     expect(ungrouped.objects.map((node) => node.id)).toEqual(fixtureDocument.objects.map((node) => node.id));
   });
