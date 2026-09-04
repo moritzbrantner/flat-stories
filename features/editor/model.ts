@@ -14,6 +14,18 @@ export function createIdentityTransform(): Transform {
   return { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0 };
 }
 
+export type PathAnchor = {
+  id: string;
+  point: Point;
+  inHandle?: Point;
+  outHandle?: Point;
+};
+
+export type VectorPath = {
+  closed: boolean;
+  anchors: PathAnchor[];
+};
+
 type NodeBase = {
   id: string;
   name: string;
@@ -48,7 +60,7 @@ export type CircleObject = NodeBase & PaintStyle & {
 
 export type PathObject = NodeBase & PaintStyle & {
   kind: "path";
-  d: string;
+  path: VectorPath;
 };
 
 export type TextObject = NodeBase & PaintStyle & {

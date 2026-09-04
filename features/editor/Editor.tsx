@@ -21,6 +21,7 @@ import {
   solveRigConstraint,
   updateConstraintTarget,
 } from "./rig";
+import { pathToSvg } from "./vectorPath";
 
 type EditorProps = { initialDocument: EditorDocument };
 type Viewport = Point & { zoom: number };
@@ -291,7 +292,7 @@ function DrawableView({ object, selected, interaction }: {
   switch (object.kind) {
     case "rectangle": return <rect {...common} x={object.x} y={object.y} width={object.width} height={object.height} rx={object.cornerRadius} />;
     case "circle": return <circle {...common} cx={object.cx} cy={object.cy} r={object.radius} />;
-    case "path": return <path {...common} d={object.d} />;
+    case "path": return <path {...common} d={pathToSvg(object.path)} />;
     case "text": return <text {...common} x={object.x} y={object.y} fontSize={object.fontSize} fontWeight="700">{object.value}</text>;
   }
 }
@@ -325,7 +326,7 @@ function Properties({ object, onChange, onTransformChange }: {
       <NumberField label="Radius" value={object.cornerRadius} min={0} onChange={(value) => onChange({ cornerRadius: value } as Partial<EditorObject>)} />
     </> : null}
     {object.kind === "circle" ? <NumberField label="Radius" value={object.radius} min={1} onChange={(value) => onChange({ radius: value } as Partial<EditorObject>)} /> : null}
-    {object.kind === "path" ? <label>Path<input value={object.d} onChange={(event) => onChange({ d: event.target.value } as Partial<EditorObject>)} /></label> : null}
+    {object.kind === "path" ? <label>Points<output>{object.path.anchors.length}</output></label> : null}
   </div>;
 }
 

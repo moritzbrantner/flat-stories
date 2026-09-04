@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createIdentityTransform } from "./model";
 import { createObject, type CreatableObjectKind } from "./objectFactory";
+import { pathToSvg } from "./vectorPath";
 
 const kinds: CreatableObjectKind[] = ["rectangle", "circle", "path", "text"];
 
@@ -24,7 +25,10 @@ describe("createObject", () => {
   it("returns useful local geometry defaults for each kind", () => {
     expect(createObject("rectangle", "r")).toMatchObject({ kind: "rectangle", x: 250, y: 190, width: 160, height: 100, cornerRadius: 18 });
     expect(createObject("circle", "c")).toMatchObject({ kind: "circle", cx: 400, cy: 260, radius: 70 });
-    expect(createObject("path", "p")).toMatchObject({ kind: "path", d: "M280 330 L400 180 L520 330 Z" });
+    const path = createObject("path", "p");
+    expect(path.kind).toBe("path");
+    if (path.kind !== "path") throw new Error("path not created");
+    expect(pathToSvg(path.path)).toBe("M280 330 L400 180 L520 330 Z");
     expect(createObject("text", "t")).toMatchObject({ kind: "text", x: 300, y: 260, value: "New text", fontSize: 36 });
   });
 

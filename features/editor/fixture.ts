@@ -1,4 +1,4 @@
-import { createIdentityTransform, type EditorDocument, type EditorObject } from "./model";
+import { createIdentityTransform, type EditorDocument, type EditorObject, type PathAnchor, type VectorPath } from "./model";
 
 const transform = () => createIdentityTransform();
 const base = (id: string, name: string, boneId?: string) => ({
@@ -9,6 +9,11 @@ const base = (id: string, name: string, boneId?: string) => ({
   visible: true,
   locked: false,
   ...(boneId ? { boneId } : {}),
+});
+
+const vectorPath = (id: string, closed: boolean, anchors: Omit<PathAnchor, "id">[]): VectorPath => ({
+  closed,
+  anchors: anchors.map((anchor, index) => ({ ...anchor, id: `${id}-a${index + 1}` })),
 });
 
 const limb = (id: string, name: string, boneId: string, length: number, fill: string): EditorObject => ({
@@ -42,7 +47,13 @@ export const fixtureDocument: EditorDocument = {
     {
       ...base("ground", "Ground"),
       kind: "path",
-      d: "M0 515 Q220 485 450 515 T900 500 V600 H0 Z",
+      path: vectorPath("ground", true, [
+        { point: { x: 0, y: 515 }, outHandle: { x: 180, y: 490 } },
+        { point: { x: 450, y: 515 }, inHandle: { x: 280, y: 500 }, outHandle: { x: 650, y: 530 } },
+        { point: { x: 900, y: 500 }, inHandle: { x: 720, y: 480 } },
+        { point: { x: 900, y: 600 } },
+        { point: { x: 0, y: 600 } },
+      ]),
       fill: "#dbe7d2",
     },
     {
@@ -52,7 +63,12 @@ export const fixtureDocument: EditorDocument = {
         {
           ...base("torso", "Torso", "spine"),
           kind: "path",
-          d: "M-8 -48 Q50 -68 108 -42 L112 42 Q52 68 -8 46 Z",
+          path: vectorPath("torso", true, [
+            { point: { x: -8, y: -48 }, outHandle: { x: 30, y: -68 } },
+            { point: { x: 108, y: -42 }, inHandle: { x: 72, y: -66 } },
+            { point: { x: 112, y: 42 }, outHandle: { x: 70, y: 66 } },
+            { point: { x: -8, y: 46 }, inHandle: { x: 30, y: 68 } },
+          ]),
           fill: "#5b7cfa",
         },
         limb("upper-arm-left-art", "Upper arm L", "upper-arm-left", 84, "#5b7cfa"),
@@ -71,10 +87,32 @@ export const fixtureDocument: EditorDocument = {
           kind: "group",
           children: [
             { ...base("face", "Face"), kind: "circle", cx: 0, cy: 0, radius: 54, fill: "#f3a67a" },
-            { ...base("hair", "Hair"), kind: "path", d: "M-46 -12 Q-35 -64 8 -54 Q45 -48 50 -10 Q18 -30 -12 -20 Q-30 -15 -46 -12 Z", fill: "#283241" },
+            {
+              ...base("hair", "Hair"),
+              kind: "path",
+              path: vectorPath("hair", true, [
+                { point: { x: -46, y: -12 }, outHandle: { x: -42, y: -52 } },
+                { point: { x: 8, y: -54 }, inHandle: { x: -20, y: -66 }, outHandle: { x: 34, y: -52 } },
+                { point: { x: 50, y: -10 }, inHandle: { x: 48, y: -40 } },
+                { point: { x: 18, y: -30 } },
+                { point: { x: -12, y: -20 } },
+              ]),
+              fill: "#283241",
+            },
             { ...base("eye-left", "Eye L"), kind: "circle", cx: -18, cy: -2, radius: 5, fill: "#283241" },
             { ...base("eye-right", "Eye R"), kind: "circle", cx: 18, cy: -2, radius: 5, fill: "#283241" },
-            { ...base("smile", "Smile"), kind: "path", d: "M-18 20 Q0 34 18 20", fill: "none", stroke: "#8b4b42", strokeWidth: 4 },
+            {
+              ...base("smile", "Smile"),
+              kind: "path",
+              path: vectorPath("smile", false, [
+                { point: { x: -18, y: 20 }, outHandle: { x: -8, y: 30 } },
+                { point: { x: 0, y: 30 }, inHandle: { x: -6, y: 30 }, outHandle: { x: 6, y: 30 } },
+                { point: { x: 18, y: 20 }, inHandle: { x: 8, y: 30 } },
+              ]),
+              fill: "none",
+              stroke: "#8b4b42",
+              strokeWidth: 4,
+            },
           ],
         },
       ],
