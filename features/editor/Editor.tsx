@@ -14,6 +14,7 @@ import { OnionSkinControls } from "./OnionSkinControls";
 import { PathEditorOverlay } from "./PathEditorOverlay";
 import { PlaybackControls } from "./PlaybackControls";
 import { applyCharacterPose, applyExpression, captureCharacterPose, captureExpression, upsertExpression, upsertPose } from "./poses";
+import { ProjectControls } from "./ProjectControls";
 import { PropertyKeyControls } from "./PropertyKeyControls";
 import {
   duplicateSiblingObjects,
@@ -225,6 +226,18 @@ export function Editor({ initialDocument }: EditorProps) {
     });
   }
 
+  function loadProject(nextDocument: EditorDocument) {
+    const preparedDocument = browserEditorEngine.prepareDocument(nextDocument);
+    setDocument(preparedDocument);
+    setSelectedIds(preparedDocument.objects.at(-1)?.id ? [preparedDocument.objects.at(-1)!.id] : []);
+    setClipId(null);
+    setCurrentTime(0);
+    setOnionSkinEnabled(false);
+    panStart.current = null;
+    objectDrag.current = null;
+    idCounter.current = 0;
+  }
+
   function keyPoseAtCurrentTime(poseId: string) {
     if (!clipId) return;
     setDocument((current) => {
@@ -326,6 +339,7 @@ export function Editor({ initialDocument }: EditorProps) {
         <button type="button" aria-pressed={snapToGrid} onClick={() => setSnapToGrid((current) => !current)}>Snap 10</button>
         <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>
         <SvgExportButton document={displayDocument} />
+        <ProjectControls document={document} onLoad={loadProject} />
         <output>{Math.round(viewport.zoom * 100)}%</output>
       </div>
     </header>
