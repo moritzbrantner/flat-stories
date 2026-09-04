@@ -3,6 +3,7 @@ import { captureCharacterPose } from "./poses";
 import { fixtureDocument } from "./fixture";
 import {
   keyframePose,
+  keyframeProperty,
   removeKeyframeAtTime,
   removeTrackKeyframe,
   updateTrackKeyframe,
@@ -20,6 +21,39 @@ describe("animation authoring", () => {
       { time: 0, value: 0 },
       { time: 1, value: 20, easing: "ease-out" },
     ]);
+  });
+
+  it("keys one node property into a stable track", () => {
+    const clip = keyframeProperty(
+      { id: "single", name: "Single", duration: 2, loop: false, tracks: [] },
+      { kind: "node", id: "caption" },
+      "opacity",
+      0.4,
+      0.5,
+      "linear",
+    );
+
+    expect(clip.tracks).toEqual([{
+      id: "node:caption:opacity",
+      target: { kind: "node", id: "caption" },
+      property: "opacity",
+      keyframes: [{ time: 0.5, value: 0.4, easing: "linear" }],
+    }]);
+  });
+
+  it("reuses an existing logical track and preserves its authored ID", () => {
+    const clip = keyframeProperty(
+      fixtureDocument.animations[0],
+      { kind: "bone", id: "head" },
+      "rotation",
+      12,
+      0.25,
+    );
+    const matching = clip.tracks.filter((track) => track.target.kind === "bone" && track.target.id === "head" && track.property === "rotation");
+
+    expect(matching).toHaveLength(1);
+    expect(matching[0].id).toBe("head-sway");
+    expect(matching[0].keyframes.find((keyframe) => keyframe.time === 0.25)).toEqual({ time: 0.25, value: 12, easing: "ease-in-out" });
   });
 
   it("turns a named pose into stable bone and node tracks", () => {
