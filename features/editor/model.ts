@@ -114,6 +114,25 @@ export type CharacterRig = {
   constraints: TwoBoneIkConstraint[];
 };
 
+export type CharacterPose = {
+  id: string;
+  name: string;
+  boneRotations: Record<string, number>;
+  nodeTransforms: Record<string, Transform>;
+};
+
+export type ExpressionNodeState = {
+  visible?: boolean;
+  opacity?: number;
+  transform?: Partial<Transform>;
+};
+
+export type CharacterExpression = {
+  id: string;
+  name: string;
+  nodes: Record<string, ExpressionNodeState>;
+};
+
 export type Easing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
 
 export type NumberKeyframe = {
@@ -161,5 +180,7 @@ export type EditorDocument = {
   height: number;
   objects: EditorObject[];
   rig?: CharacterRig;
+  poses?: CharacterPose[];
+  expressions?: CharacterExpression[];
   animations: AnimationClip[];
 };
