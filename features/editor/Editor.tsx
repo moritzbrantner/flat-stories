@@ -2,11 +2,12 @@
 
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { sampleAnimation } from "./animation";
-import { keyframePose, removeKeyframeAtTime } from "./animationAuthoring";
+import { keyframePose, removeKeyframeAtTime, removeTrackKeyframe, updateTrackKeyframe } from "./animationAuthoring";
 import { CharacterPresetPanel } from "./CharacterPresetPanel";
 import { browserEditorEngine } from "./engine";
+import { KeyframeInspector } from "./KeyframeInspector";
 import { alignObjects, canArrangeSelection, distributeObjects, type Alignment, type Distribution } from "./layout";
-import type { CharacterRig, DrawableObject, EditorDocument, EditorObject, GroupObject, Point, StrokeLinecap, StrokeLinejoin, Transform, VectorPath } from "./model";
+import type { CharacterRig, DrawableObject, EditorDocument, EditorObject, GroupObject, NumberKeyframe, Point, StrokeLinecap, StrokeLinejoin, Transform, VectorPath } from "./model";
 import { createObject, type CreatableObjectKind } from "./objectFactory";
 import { PathEditorOverlay } from "./PathEditorOverlay";
 import { applyCharacterPose, applyExpression, captureCharacterPose, captureExpression, upsertExpression, upsertPose } from "./poses";
@@ -222,6 +223,22 @@ export function Editor({ initialDocument }: EditorProps) {
     }));
   }
 
+  function updateSelectedKeyframe(trackId: string, keyframeTime: number, patch: Partial<NumberKeyframe>) {
+    if (!clipId) return;
+    setDocument((current) => ({
+      ...current,
+      animations: current.animations.map((clip) => clip.id === clipId ? updateTrackKeyframe(clip, trackId, keyframeTime, patch) : clip),
+    }));
+  }
+
+  function deleteSelectedKeyframe(trackId: string, keyframeTime: number) {
+    if (!clipId) return;
+    setDocument((current) => ({
+      ...current,
+      animations: current.animations.map((clip) => clip.id === clipId ? removeTrackKeyframe(clip, trackId, keyframeTime) : clip),
+    }));
+  }
+
   function startObjectDrag(event: ReactPointerEvent<SVGElement>, object: EditorObject) {
     event.stopPropagation();
     if (event.shiftKey || event.metaKey || event.ctrlKey) {
@@ -390,6 +407,7 @@ export function Editor({ initialDocument }: EditorProps) {
       </div>
       <TimelinePoseControls poses={document.poses ?? []} clipSelected={Boolean(selectedClip)}
         onKeyPose={keyPoseAtCurrentTime} onRemoveKeysAtTime={removeKeysAtCurrentTime} />
+      <KeyframeInspector clip={selectedClip} onUpdate={updateSelectedKeyframe} onDelete={deleteSelectedKeyframe} />
       <input aria-label="Timeline time" type="range" min={0} max={selectedClip?.duration ?? 0} step={0.01}
         disabled={!selectedClip} value={Math.min(currentTime, selectedClip?.duration ?? 0)}
         onChange={(event) => setCurrentTime(Number(event.target.value))} />
