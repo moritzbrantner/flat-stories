@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 import type { EditorDocument } from "./model";
 import { parseProject, serializeProject } from "./projectPersistence";
 
@@ -27,6 +27,7 @@ function readFileText(file: File): Promise<string> {
 
 export function ProjectControls({ document, onLoad }: ProjectControlsProps) {
   const [error, setError] = useState<string | null>(null);
+  const loadInput = useRef<HTMLInputElement | null>(null);
 
   function saveProject() {
     const source = serializeProject(document);
@@ -54,7 +55,8 @@ export function ProjectControls({ document, onLoad }: ProjectControlsProps) {
 
   return <div className="project-controls">
     <button type="button" onClick={saveProject}>Save project</button>
-    <label>Load project<input aria-label="Load project file" type="file" accept=".flatstories.json,application/json" onChange={loadProject} /></label>
+    <button type="button" onClick={() => loadInput.current?.click()}>Load project</button>
+    <input ref={loadInput} aria-label="Load project file" type="file" hidden accept=".flatstories.json,application/json" onChange={loadProject} />
     {error ? <output role="alert">{error}</output> : null}
   </div>;
 }
