@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VectorPath } from "./model";
-import { mirrorPath, movePathAnchor, pathBounds, pathToSvg, togglePathHandles, updatePathHandle } from "./vectorPath";
+import { appendPathAnchor, mirrorPath, movePathAnchor, pathBounds, pathToSvg, togglePathHandles, updatePathHandle } from "./vectorPath";
 
 const curve: VectorPath = {
   closed: false,
@@ -37,6 +37,27 @@ describe("vector paths", () => {
     const curved = togglePathHandles(straight, "a", 10);
     expect(curved.anchors[0]).toMatchObject({ inHandle: { x: 10, y: 30 }, outHandle: { x: 30, y: 30 } });
     expect(togglePathHandles(curved, "a").anchors[0]).toEqual({ id: "a", point: { x: 20, y: 30 }, inHandle: undefined, outHandle: undefined });
+  });
+
+  it("allocates a deterministic unused anchor id when a generated id collides", () => {
+    const loadedPath: VectorPath = {
+      closed: false,
+      anchors: [
+        { id: "path-1-anchor-1", point: { x: 0, y: 0 } },
+        { id: "path-1-anchor-2", point: { x: 10, y: 0 } },
+      ],
+    };
+
+    const appended = appendPathAnchor(loadedPath, {
+      id: "path-1-anchor-1",
+      point: { x: 20, y: 0 },
+    });
+
+    expect(appended.anchors.map((anchor) => anchor.id)).toEqual([
+      "path-1-anchor-1",
+      "path-1-anchor-2",
+      "path-1-anchor-3",
+    ]);
   });
 
   it("mirrors anchors and handles around the path bounds", () => {

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { Editor } from "./Editor";
 import { fixtureDocument } from "./fixture";
+import { serializeProject } from "./projectPersistence";
 import { flattenObjects } from "./sceneGraph";
 
 describe("Editor", () => {
@@ -139,5 +140,36 @@ describe("Editor", () => {
     await user.selectOptions(clip, "");
     expect(screen.queryByText(/Animation preview is read-only/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rectangle" })).toBeEnabled();
+  });
+
+  it("loads validated authored state and clears selection, preview, and onion-skin transients", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<Editor initialDocument={fixtureDocument} />);
+    const inspector = within(screen.getByRole("complementary", { name: "Inspector" }));
+    const clip = screen.getByRole("combobox", { name: "Animation clip" });
+
+    await user.click(inspector.getByRole("button", { name: "path Ground" }));
+    expect(inspector.getByRole("button", { name: "path Ground" })).toHaveAttribute("aria-pressed", "true");
+    await user.selectOptions(clip, "hello");
+    await user.click(screen.getByLabelText("Onion skin"));
+    expect(container.querySelector("[data-onion-skin]")).not.toBeNull();
+
+    const loadedDocument = structuredClone(fixtureDocument);
+    loadedDocument.name = "Loaded study";
+    const caption = loadedDocument.objects.find((object) => object.id === "caption");
+    if (!caption || caption.kind !== "text") throw new Error("Fixture caption missing.");
+    caption.value = "IMPORTED AUTHORED STATE";
+    const file = new File([serializeProject(loadedDocument)], "loaded.flatstories.json", { type: "application/json" });
+
+    await user.upload(screen.getByLabelText("Load project file"), file);
+
+    expect(await screen.findByLabelText("Loaded study")).toBeInTheDocument();
+    expect(screen.getByText("IMPORTED AUTHORED STATE")).toBeInTheDocument();
+    expect(screen.getByText("Select an object.")).toBeInTheDocument();
+    expect(inspector.getByRole("button", { name: "path Ground" })).toHaveAttribute("aria-pressed", "false");
+    expect(clip).toHaveValue("");
+    expect(screen.getByLabelText("Onion skin")).not.toBeChecked();
+    expect(screen.getByLabelText("Onion skin")).toBeDisabled();
+    expect(container.querySelector("[data-onion-skin]")).toBeNull();
   });
 });
