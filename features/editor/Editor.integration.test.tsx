@@ -163,7 +163,7 @@ describe("Editor", () => {
 
     await user.upload(screen.getByLabelText("Load project file"), file);
 
-    expect(screen.getByLabelText("Loaded study")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Loaded study")).toBeInTheDocument();
     expect(screen.getByText("IMPORTED AUTHORED STATE")).toBeInTheDocument();
     expect(screen.getByText("Select an object.")).toBeInTheDocument();
     expect(inspector.getByRole("button", { name: "path Ground" })).toHaveAttribute("aria-pressed", "false");
