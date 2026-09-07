@@ -14,6 +14,7 @@ import { OnionSkinControls } from "./OnionSkinControls";
 import { PathEditorOverlay } from "./PathEditorOverlay";
 import { PlaybackControls } from "./PlaybackControls";
 import { applyCharacterPose, applyExpression, captureCharacterPose, captureExpression, upsertExpression, upsertPose } from "./poses";
+import { ProjectControls } from "./ProjectControls";
 import { PropertyKeyControls } from "./PropertyKeyControls";
 import {
   duplicateSiblingObjects,
@@ -100,6 +101,18 @@ export function Editor({ initialDocument }: EditorProps) {
   const canUngroup = selectedIds.length === 1 && rootIds.has(selectedIds[0]) && selected?.kind === "group";
   const editingEnabled = clipId === null;
   const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);
+
+  function loadProject(nextDocument: EditorDocument) {
+    setDocument(browserEditorEngine.prepareDocument(nextDocument));
+    setSelectedIds([]);
+    setClipId(null);
+    setCurrentTime(0);
+    setOnionSkinEnabled(false);
+    setOnionSkinOffset(0.1);
+    panStart.current = null;
+    objectDrag.current = null;
+    idCounter.current = 0;
+  }
 
   function nextId(prefix: string, existingIds: readonly string[] = []) {
     let id: string;
@@ -325,6 +338,7 @@ export function Editor({ initialDocument }: EditorProps) {
       <div className="topbar-actions">
         <button type="button" aria-pressed={snapToGrid} onClick={() => setSnapToGrid((current) => !current)}>Snap 10</button>
         <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>
+        <ProjectControls document={document} onLoad={loadProject} />
         <SvgExportButton document={displayDocument} />
         <output>{Math.round(viewport.zoom * 100)}%</output>
       </div>
