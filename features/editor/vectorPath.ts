@@ -131,9 +131,23 @@ export function togglePathHandles(path: VectorPath, anchorId: string, radius = 3
   return changed ? { ...path, anchors } : path;
 }
 
+function nextAvailableAnchorId(path: VectorPath, requestedId: string): string {
+  if (!path.anchors.some((candidate) => candidate.id === requestedId)) return requestedId;
+
+  const numericSuffix = /^(.*?)(\d+)$/.exec(requestedId);
+  const prefix = numericSuffix?.[1] ?? `${requestedId}-`;
+  let suffix = numericSuffix ? Number(numericSuffix[2]) + 1 : 2;
+  let candidate = `${prefix}${suffix}`;
+  while (path.anchors.some((anchor) => anchor.id === candidate)) {
+    suffix += 1;
+    candidate = `${prefix}${suffix}`;
+  }
+  return candidate;
+}
+
 export function appendPathAnchor(path: VectorPath, anchor: PathAnchor): VectorPath {
-  if (path.anchors.some((candidate) => candidate.id === anchor.id)) return path;
-  return { ...path, anchors: [...path.anchors, anchor] };
+  const id = nextAvailableAnchorId(path, anchor.id);
+  return { ...path, anchors: [...path.anchors, id === anchor.id ? anchor : { ...anchor, id }] };
 }
 
 export function mirrorPath(path: VectorPath, axis: "horizontal" | "vertical"): VectorPath {
