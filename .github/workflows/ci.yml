@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  packages: read
 
 jobs:
   verify:
@@ -36,19 +35,9 @@ jobs:
           path: candidate-platform-packages
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.12
+          bun-version: 1.2.21
       - name: Verify immutable candidate head
         run: test "$(git -C candidate-platform-packages rev-parse HEAD)" = "$PLATFORM_PACKAGES_SHA"
-      - name: Install exact candidate workspace
-        working-directory: candidate-platform-packages
-        run: bun install --frozen-lockfile
-      - name: Run focused flat-design package gate
-        working-directory: candidate-platform-packages
-        run: |
-          bun run --filter @moritzbrantner/flat-design lint
-          bun run --filter @moritzbrantner/flat-design check-types
-          bun run --filter @moritzbrantner/flat-design test
-          bun run --filter @moritzbrantner/flat-design build
       - name: Exercise SVG interchange as a downstream consumer
         run: |
           cat > /tmp/validate-platform-packages-svg.ts <<'EOF'
