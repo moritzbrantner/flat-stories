@@ -21,3 +21,80 @@ jobs:
         run: bash scripts/codex-environment.sh setup
       - name: Verify canonical gate
         run: bun run check
+
+  platform-packages-svg-candidate:
+    runs-on: ubuntu-latest
+    env:
+      PLATFORM_PACKAGES_SHA: 5cd691abb6ff34bb13c4f157002767873836e535
+    steps:
+      - name: Check out exact platform-packages candidate
+        uses: actions/checkout@v6
+        with:
+          repository: moritzbrantner/platform-packages
+          ref: 5cd691abb6ff34bb13c4f157002767873836e535
+          path: candidate-platform-packages
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.21
+      - name: Verify immutable candidate head
+        run: test "$(git -C candidate-platform-packages rev-parse HEAD)" = "$PLATFORM_PACKAGES_SHA"
+      - name: Exercise SVG interchange as a downstream consumer
+        run: |
+          cat > /tmp/validate-platform-packages-svg.ts <<'EOF'
+          import { pathToFileURL } from "node:url";
+
+          const sourceRoot = `${process.env.GITHUB_WORKSPACE}/candidate-platform-packages/packages/flat-design/src`;
+          const interchange = await import(pathToFileURL(`${sourceRoot}/svg-interchange.ts`).href);
+          const sampling = await import(pathToFileURL(`${sourceRoot}/sampling.ts`).href);
+          const renderer = await import(pathToFileURL(`${sourceRoot}/render-svg.ts`).href);
+          const failures: string[] = [];
+
+          const plainRect = interchange.importFlatSceneFromSvg(`
+            <svg width="100" height="60" xmlns="http://www.w3.org/2000/svg">
+              <rect id="plain" width="40" height="20" />
+            </svg>
+          `);
+          if (!plainRect.isLossless || plainRect.issues.length !== 0) {
+            failures.push(`ordinary <rect> without rx/ry must import losslessly: ${JSON.stringify(plainRect.issues)}`);
+          }
+
+          const hiddenRect = interchange.importFlatSceneFromSvg(`
+            <svg width="100" height="60" xmlns="http://www.w3.org/2000/svg">
+              <rect id="hidden" width="40" height="20" rx="0" ry="0" display="none" />
+            </svg>
+          `);
+          if (!hiddenRect.issues.some((issue: { code: string; message: string }) => issue.code === "unsupported-presentation" && issue.message.includes("display"))) {
+            failures.push("display=none must be diagnosed as unsupported presentation instead of being silently made visible");
+          }
+
+          const animated = interchange.importFlatSceneFromSvg(`
+            <svg width="100" height="60" xmlns="http://www.w3.org/2000/svg">
+              <rect id="animated" width="40" height="20" rx="0" ry="0" opacity="0">
+                <animate attributeName="opacity" values="0;1" dur="1s" fill="freeze" />
+              </rect>
+            </svg>
+          `);
+          if (!animated.isLossless) {
+            failures.push(`supported animation import must stay lossless: ${JSON.stringify(animated.issues)}`);
+          } else {
+            const timeInMs = 1500;
+            const actualFrame = interchange.renderFlatSceneFrameToSvg(animated.scene, timeInMs);
+            const sampledScene = sampling.sampleFlatSceneAtTime(animated.scene, timeInMs);
+            const expectedFrame = renderer.renderFlatSceneToSvg(sampledScene);
+            if (actualFrame !== expectedFrame) {
+              failures.push("static SVG export diverged from A2 sampleFlatSceneAtTime authority");
+            }
+
+            const animatedSvg = interchange.renderFlatSceneAnimationToSvg(animated.scene);
+            if (!animatedSvg.includes('repeatCount="1"')) {
+              failures.push("SVG default one-shot repeat semantics were not preserved in animated export");
+            }
+          }
+
+          if (failures.length > 0) {
+            throw new Error(`platform-packages #88 consumer validation failed:\n- ${failures.join("\n- ")}`);
+          }
+
+          console.log("platform-packages #88 exact-head SVG consumer validation passed");
+          EOF
+          bun /tmp/validate-platform-packages-svg.ts
