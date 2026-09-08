@@ -25,13 +25,13 @@ jobs:
   platform-packages-svg-candidate:
     runs-on: ubuntu-latest
     env:
-      PLATFORM_PACKAGES_SHA: 5cd691abb6ff34bb13c4f157002767873836e535
+      PLATFORM_PACKAGES_SHA: 1967e74ae70ff75209d45b3265461570adbe713d
     steps:
       - name: Check out exact platform-packages candidate
         uses: actions/checkout@v6
         with:
           repository: moritzbrantner/platform-packages
-          ref: 5cd691abb6ff34bb13c4f157002767873836e535
+          ref: 1967e74ae70ff75209d45b3265461570adbe713d
           path: candidate-platform-packages
       - uses: oven-sh/setup-bun@v2
         with:
