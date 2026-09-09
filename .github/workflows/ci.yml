@@ -43,6 +43,23 @@ jobs:
       - name: Install flat-design candidate dependencies
         working-directory: candidate-platform-packages
         run: bun install --frozen-lockfile --filter @moritzbrantner/flat-design
+      - name: Supply public validation tooling
+        run: |
+          mkdir -p /tmp/flat-design-validation
+          cat > /tmp/flat-design-validation/package.json <<'EOF'
+          {
+            "private": true,
+            "dependencies": {
+              "@testing-library/react": "16.3.0",
+              "jsdom": "26.1.0",
+              "tsup": "8.5.0",
+              "vitest": "4.1.2"
+            }
+          }
+          EOF
+          cd /tmp/flat-design-validation
+          bun install
+          cp -a node_modules/. "$GITHUB_WORKSPACE/candidate-platform-packages/node_modules/"
       - name: Type-check flat-design workbench
         working-directory: candidate-platform-packages/packages/flat-design
         run: bun run check-types
