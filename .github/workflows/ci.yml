@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   verify:
@@ -26,6 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PLATFORM_PACKAGES_SHA: a1576ebd74a47013fd7bf17994f965bf9567e0d3
+      GH_PACKAGES_TOKEN: ${{ github.token }}
     steps:
       - name: Check out exact platform-packages candidate
         uses: actions/checkout@v6
@@ -38,9 +40,9 @@ jobs:
           bun-version: 1.2.21
       - name: Verify immutable candidate head
         run: test "$(git -C candidate-platform-packages rev-parse HEAD)" = "$PLATFORM_PACKAGES_SHA"
-      - name: Install candidate workspace
+      - name: Install flat-design candidate dependencies
         working-directory: candidate-platform-packages
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --filter @moritzbrantner/flat-design
       - name: Type-check flat-design workbench
         working-directory: candidate-platform-packages/packages/flat-design
         run: bun run check-types
