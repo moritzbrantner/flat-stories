@@ -59,7 +59,14 @@ jobs:
           EOF
           cd /tmp/flat-design-validation
           bun install
-          cp -a node_modules/. "$GITHUB_WORKSPACE/candidate-platform-packages/node_modules/"
+          target="$GITHUB_WORKSPACE/candidate-platform-packages/node_modules"
+          mkdir -p "$target/.bin" "$target/@testing-library"
+          ln -s /tmp/flat-design-validation/node_modules/vitest "$target/vitest"
+          ln -s /tmp/flat-design-validation/node_modules/jsdom "$target/jsdom"
+          ln -s /tmp/flat-design-validation/node_modules/tsup "$target/tsup"
+          ln -s /tmp/flat-design-validation/node_modules/@testing-library/react "$target/@testing-library/react"
+          ln -s /tmp/flat-design-validation/node_modules/.bin/vitest "$target/.bin/vitest"
+          ln -s /tmp/flat-design-validation/node_modules/.bin/tsup "$target/.bin/tsup"
       - name: Type-check flat-design workbench
         working-directory: candidate-platform-packages/packages/flat-design
         run: bun run check-types
