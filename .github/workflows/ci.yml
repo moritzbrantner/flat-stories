@@ -26,14 +26,14 @@ jobs:
   platform-packages-workbench-candidate:
     runs-on: ubuntu-latest
     env:
-      PLATFORM_PACKAGES_SHA: a1576ebd74a47013fd7bf17994f965bf9567e0d3
+      PLATFORM_PACKAGES_SHA: 2274feaadcca27fc8c7f73702af5b3a55c9ecd6e
       GH_PACKAGES_TOKEN: ${{ github.token }}
     steps:
       - name: Check out exact platform-packages candidate
         uses: actions/checkout@v6
         with:
           repository: moritzbrantner/platform-packages
-          ref: a1576ebd74a47013fd7bf17994f965bf9567e0d3
+          ref: 2274feaadcca27fc8c7f73702af5b3a55c9ecd6e
           path: candidate-platform-packages
       - uses: oven-sh/setup-bun@v2
         with:
