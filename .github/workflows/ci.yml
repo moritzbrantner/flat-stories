@@ -21,3 +21,32 @@ jobs:
         run: bash scripts/codex-environment.sh setup
       - name: Verify canonical gate
         run: bun run check
+
+  platform-packages-workbench-candidate:
+    runs-on: ubuntu-latest
+    env:
+      PLATFORM_PACKAGES_SHA: a1576ebd74a47013fd7bf17994f965bf9567e0d3
+    steps:
+      - name: Check out exact platform-packages candidate
+        uses: actions/checkout@v6
+        with:
+          repository: moritzbrantner/platform-packages
+          ref: a1576ebd74a47013fd7bf17994f965bf9567e0d3
+          path: candidate-platform-packages
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.21
+      - name: Verify immutable candidate head
+        run: test "$(git -C candidate-platform-packages rev-parse HEAD)" = "$PLATFORM_PACKAGES_SHA"
+      - name: Install candidate workspace
+        working-directory: candidate-platform-packages
+        run: bun install --frozen-lockfile
+      - name: Type-check flat-design workbench
+        working-directory: candidate-platform-packages/packages/flat-design
+        run: bun run check-types
+      - name: Test flat-design workbench
+        working-directory: candidate-platform-packages/packages/flat-design
+        run: bun run test
+      - name: Build flat-design package
+        working-directory: candidate-platform-packages/packages/flat-design
+        run: bun run build
