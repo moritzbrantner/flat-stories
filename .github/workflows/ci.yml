@@ -53,6 +53,7 @@ jobs:
               "@testing-library/react": "16.3.0",
               "jsdom": "26.1.0",
               "tsup": "8.5.0",
+              "typescript": "6.0.2",
               "vitest": "4.1.2"
             }
           }
