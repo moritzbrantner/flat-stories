@@ -60,6 +60,9 @@ jobs:
           cd /tmp/flat-design-validation
           bun install
           target="$GITHUB_WORKSPACE/candidate-platform-packages/node_modules"
+          rm -rf node_modules/react node_modules/react-dom
+          ln -s "$target/react" node_modules/react
+          ln -s "$target/react-dom" node_modules/react-dom
           mkdir -p "$target/.bin" "$target/@testing-library"
           ln -s /tmp/flat-design-validation/node_modules/vitest "$target/vitest"
           ln -s /tmp/flat-design-validation/node_modules/jsdom "$target/jsdom"
