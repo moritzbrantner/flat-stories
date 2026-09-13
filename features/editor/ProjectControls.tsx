@@ -1,12 +1,14 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent } from "react";
+import { downloadEditorJson, readEditorJsonFile } from "@moenarch/editor-core/browser";
 import type { EditorDocument } from "./model";
 import { parseProject, serializeProject } from "./projectPersistence";
 
 type ProjectControlsProps = {
   document: EditorDocument;
   onLoad: (document: EditorDocument) => void;
+  onSave?: () => void;
 };
 
 function projectFilename(name: string) {
@@ -14,30 +16,17 @@ function projectFilename(name: string) {
   return `${stem}.flatstories.json`;
 }
 
-function readFileText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === "string"
-      ? resolve(reader.result)
-      : reject(new Error("Project file did not contain text."));
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read project file."));
-    reader.readAsText(file);
-  });
-}
-
-export function ProjectControls({ document, onLoad }: ProjectControlsProps) {
+export function ProjectControls({ document, onLoad, onSave }: ProjectControlsProps) {
   const [error, setError] = useState<string | null>(null);
   const loadInput = useRef<HTMLInputElement | null>(null);
 
   function saveProject() {
-    const source = serializeProject(document);
-    const blob = new Blob([source], { type: "application/json;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = window.document.createElement("a");
-    anchor.href = url;
-    anchor.download = projectFilename(document.name);
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const envelope = JSON.parse(serializeProject(document)) as unknown;
+    downloadEditorJson(envelope, {
+      filename: projectFilename(document.name),
+      pretty: 2,
+    });
+    onSave?.();
   }
 
   async function loadProject(event: ChangeEvent<HTMLInputElement>) {
@@ -45,7 +34,8 @@ export function ProjectControls({ document, onLoad }: ProjectControlsProps) {
     event.target.value = "";
     if (!file) return;
     try {
-      const nextDocument = parseProject(await readFileText(file));
+      const parsed = await readEditorJsonFile(file);
+      const nextDocument = parseProject(JSON.stringify(parsed));
       onLoad(nextDocument);
       setError(null);
     } catch (loadError) {

@@ -6,6 +6,17 @@ import { fixtureDocument } from "./fixture";
 import { ProjectControls } from "./ProjectControls";
 import { serializeProject } from "./projectPersistence";
 
+function jsonFile(source: string, name: string) {
+  const file = new File([source], name, { type: "application/json" });
+  if (typeof file.text !== "function") {
+    Object.defineProperty(file, "text", {
+      configurable: true,
+      value: async () => source,
+    });
+  }
+  return file;
+}
+
 describe("project controls", () => {
   it("downloads the authored project with the project file extension", async () => {
     const user = userEvent.setup();
@@ -34,7 +45,7 @@ describe("project controls", () => {
     const onLoad = vi.fn();
     render(<ProjectControls document={fixtureDocument} onLoad={onLoad} />);
     const source = serializeProject({ ...fixtureDocument, name: "Loaded study" });
-    const file = new File([source], "loaded.flatstories.json", { type: "application/json" });
+    const file = jsonFile(source, "loaded.flatstories.json");
 
     await user.upload(screen.getByLabelText("Load project file"), file);
 
@@ -47,7 +58,7 @@ describe("project controls", () => {
     const user = userEvent.setup();
     const onLoad = vi.fn();
     render(<ProjectControls document={fixtureDocument} onLoad={onLoad} />);
-    const file = new File(["{}"], "invalid.flatstories.json", { type: "application/json" });
+    const file = jsonFile("{}", "invalid.flatstories.json");
 
     await user.upload(screen.getByLabelText("Load project file"), file);
 

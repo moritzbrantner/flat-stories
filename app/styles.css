@@ -63,10 +63,31 @@ h2 { margin: 0 0 12px; font-size: .72rem; letter-spacing: .11em; text-transform:
 .arrange-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .arrange-actions.compact { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 7px; }
 .arrange-actions.compact button { padding: 6px 3px; font-size: .66rem; }
-.layers { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
-.layers button { display: grid; grid-template-columns: 66px 1fr; width: 100%; border: 1px solid transparent; border-radius: 6px; padding: 8px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
-.layers button span { color: var(--muted); font-size: .68rem; text-transform: uppercase; }
-.layers button[aria-pressed="true"] { border-color: var(--accent); background: var(--surface); }
+.flat-stories-layer-panel {
+  --border: var(--line);
+  --card: var(--panel);
+  --card-foreground: var(--text);
+  --muted-foreground: var(--muted);
+  --primary: var(--accent);
+  --ring: var(--accent);
+  gap: 4px;
+}
+.flat-stories-layer-panel .mb-layer-editor__layer {
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  border-color: transparent;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+}
+.flat-stories-layer-panel .mb-layer-editor__layer--selected { border-color: var(--accent); background: var(--surface); }
+.flat-stories-layer-panel .mb-layer-editor__icon-button,
+.flat-stories-layer-panel .mb-layer-editor__layer-options { display: none; }
+.flat-stories-layer-panel .mb-layer-editor__layer-main { grid-column: 1; }
+.flat-stories-layer-label { display: grid; grid-template-columns: 66px minmax(0, 1fr); width: 100%; border: 0; border-radius: 5px; padding: 8px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.flat-stories-layer-label:hover, .flat-stories-layer-label:focus-visible { background: var(--surface); outline: 2px solid var(--accent); outline-offset: -2px; }
+.flat-stories-layer-label span { color: var(--muted); font-size: .68rem; text-transform: uppercase; }
 .bone-list { display: grid; gap: 5px; margin-top: 12px; }
 .bone-list span { display: flex; justify-content: space-between; color: var(--muted); font-size: .74rem; }
 .bone-list output { color: var(--text); font-variant-numeric: tabular-nums; }

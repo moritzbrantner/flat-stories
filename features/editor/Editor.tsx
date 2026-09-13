@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { isEditorEditableTarget, matchesEditorHotkey } from "@moenarch/editor-core/hotkeys";
 import { sampleAnimation } from "./animation";
 import { keyframePose, keyframeProperty, removeKeyframeAtTime, removeTrackKeyframe, updateTrackKeyframe } from "./animationAuthoring";
 import { CharacterPresetPanel } from "./CharacterPresetPanel";
+import { useFlatStoriesEditorRuntime } from "./editorRuntime";
+import { LayerTreePanel } from "./LayerTreePanel";
 import { browserEditorEngine } from "./engine";
 import { KeyframeInspector } from "./KeyframeInspector";
 import { alignObjects, canArrangeSelection, distributeObjects, type Alignment, type Distribution } from "./layout";
@@ -19,7 +22,6 @@ import { PropertyKeyControls } from "./PropertyKeyControls";
 import {
   duplicateSiblingObjects,
   findObject,
-  flattenObjects,
   groupRootObjects,
   objectTransformToSvg,
   patchObject,
@@ -42,6 +44,7 @@ import { TransformOverlay } from "./TransformOverlay";
 import { appendPathAnchor, mirrorPath, movePathAnchor, pathToSvg, togglePathHandles, updatePathHandle } from "./vectorPath";
 
 type EditorProps = { initialDocument: EditorDocument };
+type DocumentUpdate = EditorDocument | ((document: EditorDocument) => EditorDocument);
 type Viewport = Point & { zoom: number };
 type DragState = { id: string; pointer: Point; transform: Transform; basisRotation: number };
 type PathHandle = "inHandle" | "outHandle";
@@ -69,8 +72,18 @@ function rotateVector(point: Point, rotation: number): Point {
 
 export function Editor({ initialDocument }: EditorProps) {
   const prepared = useMemo(() => browserEditorEngine.prepareDocument(initialDocument), [initialDocument]);
-  const [document, setDocument] = useState(prepared);
-  const [selectedIds, setSelectedIds] = useState<string[]>(() => prepared.objects.at(-1)?.id ? [prepared.objects.at(-1)!.id] : []);
+  const initialSelection = useMemo(() => prepared.objects.at(-1)?.id ? [prepared.objects.at(-1)!.id] : [], [prepared]);
+  const {
+    canRedo,
+    canUndo,
+    commit,
+    document,
+    endInteraction,
+    redo,
+    resetDocument,
+    undo,
+  } = useFlatStoriesEditorRuntime(prepared);
+  const [selectedIds, setSelectedIds] = useState<string[]>(initialSelection);
   const [viewport, setViewport] = useState<Viewport>({ x: 70, y: 50, zoom: 0.85 });
   const [showRig, setShowRig] = useState(Boolean(prepared.rig));
   const [snapToGrid, setSnapToGrid] = useState(true);
@@ -82,7 +95,10 @@ export function Editor({ initialDocument }: EditorProps) {
   const objectDrag = useRef<DragState | null>(null);
   const idCounter = useRef(0);
 
-  const flatObjects = useMemo(() => flattenObjects(document.objects), [document.objects]);
+  function setDocument(update: DocumentUpdate) {
+    commit(update, { id: "edit-document", label: "Edit document" });
+  }
+
   const selectedId = selectedIds.at(-1) ?? null;
   const selected = selectedId ? findObject(document.objects, selectedId) : null;
   const selectedClip = document.animations.find((clip) => clip.id === clipId) ?? null;
@@ -102,8 +118,25 @@ export function Editor({ initialDocument }: EditorProps) {
   const editingEnabled = clipId === null;
   const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);
 
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (isEditorEditableTarget(event.target)) return;
+      if (matchesEditorHotkey(event, "Mod+Shift+z")) {
+        event.preventDefault();
+        redo();
+        setSelectedIds([]);
+      } else if (matchesEditorHotkey(event, "Mod+z")) {
+        event.preventDefault();
+        undo();
+        setSelectedIds([]);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [redo, undo]);
+
   function loadProject(nextDocument: EditorDocument) {
-    setDocument(browserEditorEngine.prepareDocument(nextDocument));
+    resetDocument(browserEditorEngine.prepareDocument(nextDocument));
     setSelectedIds([]);
     setClipId(null);
     setCurrentTime(0);
@@ -131,7 +164,10 @@ export function Editor({ initialDocument }: EditorProps) {
   function addObject(kind: CreatableObjectKind) {
     if (!editingEnabled) return;
     const object = createObject(kind, nextId(kind));
-    setDocument((current) => ({ ...current, objects: [...current.objects, object] }));
+    commit((current) => ({ ...current, objects: [...current.objects, object] }), {
+      id: "add-object",
+      label: `Add ${kind}`,
+    });
     setSelectedIds([object.id]);
   }
 
@@ -171,14 +207,20 @@ export function Editor({ initialDocument }: EditorProps) {
   function groupSelection() {
     if (!canGroup || !editingEnabled) return;
     const id = nextId("group");
-    setDocument((current) => groupRootObjects(current, selectedIds, id));
+    commit((current) => groupRootObjects(current, selectedIds, id), {
+      id: "group-objects",
+      label: "Group objects",
+    });
     setSelectedIds([id]);
   }
 
   function ungroupSelection() {
     if (!canUngroup || !selectedId || selected?.kind !== "group" || !editingEnabled) return;
     const childIds = selected.children.map((child) => child.id);
-    setDocument((current) => ungroupRootObject(current, selectedId));
+    commit((current) => ungroupRootObject(current, selectedId), {
+      id: "ungroup-objects",
+      label: "Ungroup objects",
+    });
     setSelectedIds(childIds);
   }
 
@@ -186,7 +228,10 @@ export function Editor({ initialDocument }: EditorProps) {
     if (!editingEnabled || selectedIds.length === 0) return;
     const result = duplicateSiblingObjects(document, selectedIds, (kind) => nextId(kind));
     if (result.duplicatedIds.length === 0) return;
-    setDocument(result.document);
+    commit(result.document, {
+      id: "duplicate-objects",
+      label: "Duplicate objects",
+    });
     setSelectedIds(result.duplicatedIds);
   }
 
@@ -320,16 +365,22 @@ export function Editor({ initialDocument }: EditorProps) {
     const localDelta = rotateVector(worldDelta, -drag.basisRotation);
     const x = drag.transform.x + localDelta.x;
     const y = drag.transform.y + localDelta.y;
-    setDocument((current) => patchObjectTransform(current, drag.id, {
+    commit((current) => patchObjectTransform(current, drag.id, {
       x: snapToGrid ? snapValue(x, GRID_STEP) : x,
       y: snapToGrid ? snapValue(y, GRID_STEP) : y,
-    }));
+    }), {
+      id: "move-object",
+      label: "Move object",
+      mergeKey: `move:${drag.id}`,
+      interaction: true,
+    });
   }
 
   function endObjectDrag(event: ReactPointerEvent<SVGElement>) {
     if (!objectDrag.current) return;
     event.stopPropagation();
     objectDrag.current = null;
+    endInteraction();
   }
 
   return <main className="editor-shell">
@@ -338,6 +389,8 @@ export function Editor({ initialDocument }: EditorProps) {
       <div className="topbar-actions">
         <button type="button" aria-pressed={snapToGrid} onClick={() => setSnapToGrid((current) => !current)}>Snap 10</button>
         <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>
+        <button type="button" disabled={!canUndo} onClick={() => { undo(); setSelectedIds([]); }}>Undo</button>
+        <button type="button" disabled={!canRedo} onClick={() => { redo(); setSelectedIds([]); }}>Redo</button>
         <ProjectControls document={document} onLoad={loadProject} />
         <SvgExportButton document={displayDocument} />
         <output>{Math.round(viewport.zoom * 100)}%</output>
@@ -443,12 +496,7 @@ export function Editor({ initialDocument }: EditorProps) {
       </section>
       <section>
         <h2>Layers</h2>
-        <ol className="layers">{flatObjects.map(({ node, depth }) => <li key={node.id}>
-          <button type="button" aria-pressed={selectedIds.includes(node.id)} style={{ paddingLeft: 8 + depth * 14 }}
-            onClick={(event) => selectNode(node.id, event.shiftKey || event.metaKey || event.ctrlKey)}>
-            <span>{node.kind}</span>{node.name}
-          </button>
-        </li>)}</ol>
+        <LayerTreePanel document={document} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
       </section>
       <CharacterPresetPanel
         poses={document.poses ?? []}

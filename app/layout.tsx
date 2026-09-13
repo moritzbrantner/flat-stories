@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@moritzbrantner/layer-editor/styles.css";
 import "./styles.css";
 
 export const metadata: Metadata = {
