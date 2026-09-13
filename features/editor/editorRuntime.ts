@@ -2,21 +2,13 @@
 
 import { useCallback, useState } from "react";
 import {
-  markEditorRuntimeSaved,
-  resetEditorRuntime,
-  setEditorRuntimeSelection,
-} from "@moenarch/editor-core/runtime";
-import {
   applyEditorInteractionOperation,
   applyEditorOperation,
   createEditorOperationRuntime,
   redoEditorOperationRuntime,
-  replaceEditorOperationRuntimeCoreState,
   undoEditorOperationRuntime,
 } from "@moenarch/editor-core/operations";
 import type { EditorDocument } from "./model";
-
-export type FlatStoriesSelection = string[];
 
 type DocumentUpdate =
   | EditorDocument
@@ -26,22 +18,18 @@ type CommitOptions = {
   id: string;
   label?: string;
   mergeKey?: string;
-  selectionAfter?: FlatStoriesSelection;
   interaction?: boolean;
-  recordHistory?: boolean;
 };
 
-export function useFlatStoriesEditorRuntime(
-  initialDocument: EditorDocument,
-  initialSelection: FlatStoriesSelection,
-) {
-  const [editor, setEditor] = useState(() =>
-    createEditorOperationRuntime<EditorDocument, FlatStoriesSelection>({
-      initialDocument,
-      initialSelection,
-      operationHistoryLimit: 100,
-    }),
-  );
+function createRuntime(document: EditorDocument) {
+  return createEditorOperationRuntime<EditorDocument>({
+    initialDocument: document,
+    operationHistoryLimit: 100,
+  });
+}
+
+export function useFlatStoriesEditorRuntime(initialDocument: EditorDocument) {
+  const [editor, setEditor] = useState(() => createRuntime(initialDocument));
 
   const commit = useCallback((update: DocumentUpdate, options: CommitOptions) => {
     setEditor((current) => {
@@ -49,7 +37,6 @@ export function useFlatStoriesEditorRuntime(
         id: options.id,
         label: options.label,
         mergeKey: options.mergeKey,
-        selectionAfter: options.selectionAfter,
         apply: typeof update === "function"
           ? update
           : () => update,
@@ -57,43 +44,12 @@ export function useFlatStoriesEditorRuntime(
 
       return options.interaction
         ? applyEditorInteractionOperation(current, operation)
-        : applyEditorOperation(current, operation, {
-            recordHistory: options.recordHistory,
-          });
-    });
-  }, []);
-
-  const setSelection = useCallback((
-    update: FlatStoriesSelection | ((current: FlatStoriesSelection) => FlatStoriesSelection),
-  ) => {
-    setEditor((current) => {
-      const previous = current.runtime.selection ?? [];
-      const selection = typeof update === "function" ? update(previous) : update;
-      const runtime = setEditorRuntimeSelection(current.runtime, [...selection]);
-      return replaceEditorOperationRuntimeCoreState(current, runtime);
+        : applyEditorOperation(current, operation);
     });
   }, []);
 
   const resetDocument = useCallback((document: EditorDocument) => {
-    setEditor((current) => {
-      const runtime = resetEditorRuntime(current.runtime, document, {
-        selection: [],
-        markSaved: true,
-      });
-      return replaceEditorOperationRuntimeCoreState(current, runtime, {
-        clearIssues: true,
-        clearOperationHistory: true,
-      });
-    });
-  }, []);
-
-  const markSaved = useCallback(() => {
-    setEditor((current) =>
-      replaceEditorOperationRuntimeCoreState(
-        current,
-        markEditorRuntimeSaved(current.runtime),
-      ),
-    );
+    setEditor(createRuntime(document));
   }, []);
 
   const undo = useCallback(() => setEditor(undoEditorOperationRuntime), []);
@@ -107,7 +63,7 @@ export function useFlatStoriesEditorRuntime(
           id: "interaction-boundary",
           apply: (document) => document,
         },
-        { merge: false, recordHistory: false },
+        { merge: false },
       ),
     );
   }, []);
@@ -118,12 +74,8 @@ export function useFlatStoriesEditorRuntime(
     commit,
     document: editor.runtime.document,
     endInteraction,
-    markSaved,
     redo,
     resetDocument,
-    selectedIds: editor.runtime.selection ?? [],
-    setSelection,
-    status: editor.runtime.status,
     undo,
   };
 }
