@@ -24,7 +24,22 @@ describe("Editor", () => {
     expect(screen.getByRole("button", { name: /^text Text$/i })).toHaveAttribute("aria-pressed", "true");
     await user.click(toolbar.getByRole("button", { name: "Duplicate" }));
     expect(screen.getByRole("button", { name: /^text Text Copy$/i })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getAllByRole("listitem")).toHaveLength(flattenObjects(fixtureDocument.objects).length + 5);
+    expect(screen.getAllByRole("treeitem")).toHaveLength(flattenObjects(fixtureDocument.objects).length + 5);
+  });
+
+  it("restores shared runtime edits through undo and redo", async () => {
+    const user = userEvent.setup();
+    render(<Editor initialDocument={fixtureDocument} />);
+    const toolbar = within(screen.getByRole("complementary", { name: "Drawing tools" }));
+
+    await user.click(toolbar.getByRole("button", { name: "Rectangle" }));
+    expect(screen.getByRole("button", { name: /^rectangle Rectangle$/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.queryByRole("button", { name: /^rectangle Rectangle$/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Redo" }));
+    expect(screen.getByRole("button", { name: /^rectangle Rectangle$/i })).toBeInTheDocument();
   });
 
   it("edits the selected layer name", async () => {
@@ -33,7 +48,7 @@ describe("Editor", () => {
     const name = screen.getByLabelText("Name");
     await user.clear(name);
     await user.type(name, "Headline");
-    expect(screen.getByRole("button", { name: /Headline/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^text Headline$/i })).toBeInTheDocument();
   });
 
   it("enables alignment for compatible sibling selections", async () => {
@@ -159,7 +174,11 @@ describe("Editor", () => {
     const caption = loadedDocument.objects.find((object) => object.id === "caption");
     if (!caption || caption.kind !== "text") throw new Error("Fixture caption missing.");
     caption.value = "IMPORTED AUTHORED STATE";
-    const file = new File([serializeProject(loadedDocument)], "loaded.flatstories.json", { type: "application/json" });
+    const projectSource = serializeProject(loadedDocument);
+    const file = new File([projectSource], "loaded.flatstories.json", { type: "application/json" });
+    if (typeof file.text !== "function") {
+      Object.defineProperty(file, "text", { configurable: true, value: async () => projectSource });
+    }
 
     await user.upload(screen.getByLabelText("Load project file"), file);
 
