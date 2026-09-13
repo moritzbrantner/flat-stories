@@ -1,3 +1,4 @@
+import { reorderFlatStoriesSiblings } from "./layerAdapter";
 import { createIdentityTransform, type EditorDocument, type EditorObject, type GroupObject, type Transform } from "./model";
 
 export type FlatNode = {
@@ -168,11 +169,9 @@ export function reorderObject(document: EditorDocument, id: string, direction: L
     else if (direction === "backward") target = Math.max(0, index - 1);
     else if (direction === "front") target = siblings.length - 1;
     else target = 0;
-    if (target === index) return siblings as EditorObject[];
-    const next = [...siblings];
-    const [node] = next.splice(index, 1);
-    next.splice(target, 0, node);
-    return next;
+    return target === index
+      ? siblings as EditorObject[]
+      : reorderFlatStoriesSiblings(siblings, id, target);
   });
   return objects === document.objects ? document : { ...document, objects };
 }
