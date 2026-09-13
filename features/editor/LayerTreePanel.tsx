@@ -1,10 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  LayerEditorPanel,
-  type LayerEditorSelection,
-} from "@moritzbrantner/layer-editor/react";
+import { type LayerEditorSelection } from "@moritzbrantner/layer-editor/core";
+import { LayerEditorPanel } from "@moritzbrantner/layer-editor/react";
 import type { EditorDocument } from "./model";
 import {
   projectFlatStoriesLayers,
