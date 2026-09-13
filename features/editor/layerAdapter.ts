@@ -4,7 +4,6 @@ import {
   type LayerEditorLayer,
 } from "@moritzbrantner/layer-editor/core";
 import type { EditorDocument, EditorObject } from "./model";
-import { flattenObjects } from "./sceneGraph";
 
 export type FlatStoriesLayerData = {
   depth: number;
@@ -34,12 +33,23 @@ function projectObject(
   };
 }
 
+function projectObjects(
+  objects: readonly EditorObject[],
+  depth = 0,
+  parentId: string | null = null,
+): Array<LayerEditorLayer<FlatStoriesLayerData>> {
+  const layers: Array<LayerEditorLayer<FlatStoriesLayerData>> = [];
+  for (const object of objects) {
+    layers.push(projectObject(object, depth, parentId));
+    if (object.kind === "group") {
+      layers.push(...projectObjects(object.children, depth + 1, object.id));
+    }
+  }
+  return layers;
+}
+
 export function projectFlatStoriesLayers(document: EditorDocument): FlatStoriesLayerDocument {
-  return {
-    layers: flattenObjects(document.objects).map(({ node, depth, parentId }) =>
-      projectObject(node, depth, parentId),
-    ),
-  };
+  return { layers: projectObjects(document.objects) };
 }
 
 export function reorderFlatStoriesSiblings(
