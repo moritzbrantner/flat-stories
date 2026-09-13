@@ -19,7 +19,9 @@ jobs:
         with:
           bun-version: 1.2.21
       - name: Apply focused migration
-        run: node scripts/apply-editor-foundations.mjs
+        run: |
+          node scripts/apply-editor-foundations.mjs
+          node scripts/patch-editor-foundation-tests.mjs
       - name: Resolve dependencies and lockfile
         run: bun install
       - name: Verify architecture slice
