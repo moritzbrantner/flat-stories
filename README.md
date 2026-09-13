@@ -23,9 +23,11 @@ The bundled `Nova character study` fixture dogfoods the model with nested artwor
 
 ## Architecture boundary
 
-React owns browser input, transient interaction state, panels, selection UI, timeline UI, and SVG DOM rendering. `features/editor/engine.ts` remains the small computational seam for workloads that may later justify Rust/WASM. The serialized document model stays plain data.
+React owns browser input, transient product interaction state, panels, selection UI, timeline UI, and SVG DOM rendering. `features/editor/engine.ts` remains the small computational seam for workloads that may later justify Rust/WASM. The serialized document model stays plain data.
 
-Flat Stories owns SVG/character vocabulary: scene nodes, paint, character, rig, IK constraints, poses, animation clips, and SVG interchange. Generic editor mechanics such as reusable command/history infrastructure belong in `editor-core`; project-file versioning and validation stay in Flat Stories because they encode this product's character/SVG document vocabulary.
+Flat Stories owns SVG/character vocabulary and the one canonical nested scene graph: scene nodes, paint, character, rig, IK constraints, poses, animation clips, project validation/versioning, and SVG interchange. Generic document-operation history, undo/redo, merged interaction transactions, hotkey helpers, and browser file mechanics come from `@moenarch/editor-core` rather than being reimplemented locally.
+
+`@moritzbrantner/layer-editor` is consumed through `features/editor/layerAdapter.ts`. The adapter projects the canonical recursive Flat Stories scene into generic layer rows and delegates generic sibling-order mechanics, but it does not create a second persisted layer document. The current shared layer model cannot faithfully represent arbitrarily nested Flat Stories groups, so the projection remains non-authoritative and hierarchy-changing operations stay on the canonical scene graph until the shared boundary can represent them without loss.
 
 Rust/WASM is still workload-driven. Do not move the React state tree, DOM rendering, or pointer handling into Rust. Geometry kernels such as path booleans, path normalization, hit-testing, or deformation may move behind `EditorEngine` once profiling shows a concrete reason.
 
@@ -72,4 +74,4 @@ The rest pose is the authored editing state. Selecting an animation clip switche
 
 ## Current verification focus
 
-Pure scene-graph, vector-path, geometry, snapping, animation, animation-authoring, playback/range, onion-skin timing, SVG export, project serialization/validation, pose/expression, and rig math are deterministic and covered independently from React. Browser-focused tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, pose/expression authoring, pose keyframing, direct keyframe editing, individual property keying, playback controls, preview loop ranges, pointer-disabled onion skins, SVG/project persistence controls, live project-load transient resets, animation-preview isolation, rig controls, and timeline entry points.
+Pure scene-graph, vector-path, geometry, snapping, animation, animation-authoring, playback/range, onion-skin timing, SVG export, project serialization/validation, pose/expression, rig math, and shared-layer projection are deterministic and covered independently from React. Browser-focused tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, shared undo/redo, pose/expression authoring, pose keyframing, direct keyframe editing, individual property keying, playback controls, preview loop ranges, pointer-disabled onion skins, SVG/project persistence controls, live project-load transient resets, animation-preview isolation, rig controls, and timeline entry points.
