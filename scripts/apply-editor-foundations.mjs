@@ -25,7 +25,7 @@ replaceOnce(
 );
 replaceOnce(
   '  const prepared = useMemo(() => browserEditorEngine.prepareDocument(initialDocument), [initialDocument]);\n  const [document, setDocument] = useState(prepared);\n  const [selectedIds, setSelectedIds] = useState<string[]>(() => prepared.objects.at(-1)?.id ? [prepared.objects.at(-1)!.id] : []);\n',
-  '  const prepared = useMemo(() => browserEditorEngine.prepareDocument(initialDocument), [initialDocument]);\n  const initialSelection = useMemo(() => prepared.objects.at(-1)?.id ? [prepared.objects.at(-1)!.id] : [], [prepared]);\n  const {\n    canRedo,\n    canUndo,\n    commit,\n    document,\n    endInteraction,\n    markSaved,\n    redo,\n    resetDocument,\n    selectedIds,\n    setSelection: setSelectedIds,\n    undo,\n  } = useFlatStoriesEditorRuntime(prepared, initialSelection);\n',
+  '  const prepared = useMemo(() => browserEditorEngine.prepareDocument(initialDocument), [initialDocument]);\n  const initialSelection = useMemo(() => prepared.objects.at(-1)?.id ? [prepared.objects.at(-1)!.id] : [], [prepared]);\n  const {\n    canRedo,\n    canUndo,\n    commit,\n    document,\n    endInteraction,\n    redo,\n    resetDocument,\n    undo,\n  } = useFlatStoriesEditorRuntime(prepared);\n  const [selectedIds, setSelectedIds] = useState<string[]>(initialSelection);\n',
 );
 replaceOnce(
   '  const idCounter = useRef(0);\n\n  const flatObjects = useMemo(() => flattenObjects(document.objects), [document.objects]);\n',
@@ -33,27 +33,27 @@ replaceOnce(
 );
 replaceOnce(
   '  const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);\n\n  function loadProject(nextDocument: EditorDocument) {',
-  '  const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);\n\n  useEffect(() => {\n    function onKeyDown(event: KeyboardEvent) {\n      if (isEditorEditableTarget(event.target)) return;\n      if (matchesEditorHotkey(event, "Mod+Shift+z")) {\n        event.preventDefault();\n        redo();\n      } else if (matchesEditorHotkey(event, "Mod+z")) {\n        event.preventDefault();\n        undo();\n      }\n    }\n    window.addEventListener("keydown", onKeyDown);\n    return () => window.removeEventListener("keydown", onKeyDown);\n  }, [redo, undo]);\n\n  function loadProject(nextDocument: EditorDocument) {',
+  '  const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);\n\n  useEffect(() => {\n    setSelectedIds((current) => {\n      const next = current.filter((id) => findObject(document.objects, id));\n      return next.length === current.length ? current : next;\n    });\n  }, [document]);\n\n  useEffect(() => {\n    function onKeyDown(event: KeyboardEvent) {\n      if (isEditorEditableTarget(event.target)) return;\n      if (matchesEditorHotkey(event, "Mod+Shift+z")) {\n        event.preventDefault();\n        redo();\n      } else if (matchesEditorHotkey(event, "Mod+z")) {\n        event.preventDefault();\n        undo();\n      }\n    }\n    window.addEventListener("keydown", onKeyDown);\n    return () => window.removeEventListener("keydown", onKeyDown);\n  }, [redo, undo]);\n\n  function loadProject(nextDocument: EditorDocument) {',
 );
 replaceOnce(
   '    setDocument(browserEditorEngine.prepareDocument(nextDocument));\n    setSelectedIds([]);\n',
-  '    resetDocument(browserEditorEngine.prepareDocument(nextDocument));\n',
+  '    resetDocument(browserEditorEngine.prepareDocument(nextDocument));\n    setSelectedIds([]);\n',
 );
 replaceOnce(
   '    setDocument((current) => ({ ...current, objects: [...current.objects, object] }));\n    setSelectedIds([object.id]);',
-  '    commit((current) => ({ ...current, objects: [...current.objects, object] }), {\n      id: "add-object",\n      label: `Add ${kind}`,\n      selectionAfter: [object.id],\n    });',
+  '    commit((current) => ({ ...current, objects: [...current.objects, object] }), {\n      id: "add-object",\n      label: `Add ${kind}`,\n    });\n    setSelectedIds([object.id]);',
 );
 replaceOnce(
   '    setDocument((current) => groupRootObjects(current, selectedIds, id));\n    setSelectedIds([id]);',
-  '    commit((current) => groupRootObjects(current, selectedIds, id), {\n      id: "group-objects",\n      label: "Group objects",\n      selectionAfter: [id],\n    });',
+  '    commit((current) => groupRootObjects(current, selectedIds, id), {\n      id: "group-objects",\n      label: "Group objects",\n    });\n    setSelectedIds([id]);',
 );
 replaceOnce(
   '    setDocument((current) => ungroupRootObject(current, selectedId));\n    setSelectedIds(childIds);',
-  '    commit((current) => ungroupRootObject(current, selectedId), {\n      id: "ungroup-objects",\n      label: "Ungroup objects",\n      selectionAfter: childIds,\n    });',
+  '    commit((current) => ungroupRootObject(current, selectedId), {\n      id: "ungroup-objects",\n      label: "Ungroup objects",\n    });\n    setSelectedIds(childIds);',
 );
 replaceOnce(
   '    setDocument(result.document);\n    setSelectedIds(result.duplicatedIds);',
-  '    commit(result.document, {\n      id: "duplicate-objects",\n      label: "Duplicate objects",\n      selectionAfter: result.duplicatedIds,\n    });',
+  '    commit(result.document, {\n      id: "duplicate-objects",\n      label: "Duplicate objects",\n    });\n    setSelectedIds(result.duplicatedIds);',
 );
 replaceOnce(
   '    setDocument((current) => patchObjectTransform(current, drag.id, {\n      x: snapToGrid ? snapValue(x, GRID_STEP) : x,\n      y: snapToGrid ? snapValue(y, GRID_STEP) : y,\n    }));',
@@ -65,7 +65,7 @@ replaceOnce(
 );
 replaceOnce(
   '        <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>\n        <ProjectControls document={document} onLoad={loadProject} />',
-  '        <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>\n        <button type="button" disabled={!canUndo} onClick={undo}>Undo</button>\n        <button type="button" disabled={!canRedo} onClick={redo}>Redo</button>\n        <ProjectControls document={document} onLoad={loadProject} onSave={markSaved} />',
+  '        <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>\n        <button type="button" disabled={!canUndo} onClick={undo}>Undo</button>\n        <button type="button" disabled={!canRedo} onClick={redo}>Redo</button>\n        <ProjectControls document={document} onLoad={loadProject} />',
 );
 replaceOnce(
   '        <ol className="layers">{flatObjects.map(({ node, depth }) => <li key={node.id}>\n          <button type="button" aria-pressed={selectedIds.includes(node.id)} style={{ paddingLeft: 8 + depth * 14 }}\n            onClick={(event) => selectNode(node.id, event.shiftKey || event.metaKey || event.ctrlKey)}>\n            <span>{node.kind}</span>{node.name}\n          </button>\n        </li>)}</ol>',
