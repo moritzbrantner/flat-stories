@@ -33,7 +33,7 @@ replaceOnce(
 );
 replaceOnce(
   '  const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);\n\n  function loadProject(nextDocument: EditorDocument) {',
-  '  const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);\n\n  useEffect(() => {\n    setSelectedIds((current) => {\n      const next = current.filter((id) => findObject(document.objects, id));\n      return next.length === current.length ? current : next;\n    });\n  }, [document]);\n\n  useEffect(() => {\n    function onKeyDown(event: KeyboardEvent) {\n      if (isEditorEditableTarget(event.target)) return;\n      if (matchesEditorHotkey(event, "Mod+Shift+z")) {\n        event.preventDefault();\n        redo();\n      } else if (matchesEditorHotkey(event, "Mod+z")) {\n        event.preventDefault();\n        undo();\n      }\n    }\n    window.addEventListener("keydown", onKeyDown);\n    return () => window.removeEventListener("keydown", onKeyDown);\n  }, [redo, undo]);\n\n  function loadProject(nextDocument: EditorDocument) {',
+  '  const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);\n\n  useEffect(() => {\n    function onKeyDown(event: KeyboardEvent) {\n      if (isEditorEditableTarget(event.target)) return;\n      if (matchesEditorHotkey(event, "Mod+Shift+z")) {\n        event.preventDefault();\n        redo();\n        setSelectedIds([]);\n      } else if (matchesEditorHotkey(event, "Mod+z")) {\n        event.preventDefault();\n        undo();\n        setSelectedIds([]);\n      }\n    }\n    window.addEventListener("keydown", onKeyDown);\n    return () => window.removeEventListener("keydown", onKeyDown);\n  }, [redo, undo]);\n\n  function loadProject(nextDocument: EditorDocument) {',
 );
 replaceOnce(
   '    setDocument(browserEditorEngine.prepareDocument(nextDocument));\n    setSelectedIds([]);\n',
@@ -65,7 +65,7 @@ replaceOnce(
 );
 replaceOnce(
   '        <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>\n        <ProjectControls document={document} onLoad={loadProject} />',
-  '        <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>\n        <button type="button" disabled={!canUndo} onClick={undo}>Undo</button>\n        <button type="button" disabled={!canRedo} onClick={redo}>Redo</button>\n        <ProjectControls document={document} onLoad={loadProject} />',
+  '        <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>\n        <button type="button" disabled={!canUndo} onClick={() => { undo(); setSelectedIds([]); }}>Undo</button>\n        <button type="button" disabled={!canRedo} onClick={() => { redo(); setSelectedIds([]); }}>Redo</button>\n        <ProjectControls document={document} onLoad={loadProject} />',
 );
 replaceOnce(
   '        <ol className="layers">{flatObjects.map(({ node, depth }) => <li key={node.id}>\n          <button type="button" aria-pressed={selectedIds.includes(node.id)} style={{ paddingLeft: 8 + depth * 14 }}\n            onClick={(event) => selectNode(node.id, event.shiftKey || event.metaKey || event.ctrlKey)}>\n            <span>{node.kind}</span>{node.name}\n          </button>\n        </li>)}</ol>',
