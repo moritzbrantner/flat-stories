@@ -8,6 +8,16 @@ bun run dev
 bun run check
 ```
 
+For coordinated work with sibling editor foundations, use source mode instead of waiting for package publication:
+
+```sh
+bun run dev:source
+bun run verify:source
+bun run source:status
+```
+
+Source mode expects sibling `editor-core/` and `layer-editor/` checkouts by default and can be overridden with `EDITOR_CORE_SOURCE` and `LAYER_EDITOR_SOURCE`. The committed semver dependencies remain the registry/release fallback; `bun run verify:registry` restores and verifies that path.
+
 ## Product direction
 
 Flat Stories is deliberately not a generic graphics framework. It specializes a small SVG scene graph for character illustration and animation:
