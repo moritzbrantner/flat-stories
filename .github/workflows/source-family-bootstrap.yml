@@ -28,7 +28,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: moritzbrantner/layer-editor
-          ref: fix/moenarch-source-first
           path: .source/layer-editor
 
       - name: Set up Bun
