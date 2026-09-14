@@ -1,0 +1,40 @@
+name: Source Family Bootstrap
+
+on:
+  push:
+    branches:
+      - chore/source-first-editor-family
+
+permissions:
+  contents: read
+
+jobs:
+  verify-source-family:
+    runs-on: ubuntu-latest
+    env:
+      EDITOR_CORE_SOURCE: ${{ github.workspace }}/.source/editor-core
+      LAYER_EDITOR_SOURCE: ${{ github.workspace }}/.source/layer-editor
+    steps:
+      - name: Check out Flat Stories
+        uses: actions/checkout@v6
+
+      - name: Check out editor-core source
+        uses: actions/checkout@v6
+        with:
+          repository: moritzbrantner/editor-core
+          path: .source/editor-core
+
+      - name: Check out layer-editor source
+        uses: actions/checkout@v6
+        with:
+          repository: moritzbrantner/layer-editor
+          ref: fix/moenarch-source-first
+          path: .source/layer-editor
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.21
+
+      - name: Verify editor-family source chain
+        run: bun run verify:source
