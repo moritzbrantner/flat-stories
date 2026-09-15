@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import type { DrawableObject, EditorDocument, PathObject, Point, TextObject } from "../model";
+import { CanvasStateCache } from "./canvasState";
 import { hitTestRenderFrame, type ComplexShapeHitTester } from "./hitTest";
 import { createPreparedPathCache } from "./pathPreparation";
 import {
@@ -38,22 +39,13 @@ function pathFor(object: PathObject): Path2D {
   return pathCache.get(object.path);
 }
 
-function applyPaint(context: CanvasRenderingContext2D, object: DrawableObject) {
-  context.lineWidth = object.strokeWidth ?? 1;
-  context.lineCap = object.strokeLinecap ?? "butt";
-  context.lineJoin = object.strokeLinejoin ?? "miter";
-  context.setLineDash([]);
-  if (object.fill !== "none") context.fillStyle = object.fill;
-  if (object.stroke && object.stroke !== "none") context.strokeStyle = object.stroke;
-}
-
 function fillAndStroke(context: CanvasRenderingContext2D, object: DrawableObject) {
   if (object.fill !== "none") context.fill();
   if (object.stroke && object.stroke !== "none") context.stroke();
 }
 
-function drawDrawable(context: CanvasRenderingContext2D, object: DrawableObject) {
-  applyPaint(context, object);
+function drawDrawable(context: CanvasRenderingContext2D, state: CanvasStateCache, object: DrawableObject) {
+  state.applyDrawable(object);
   switch (object.kind) {
     case "rectangle": {
       context.beginPath();
@@ -75,8 +67,6 @@ function drawDrawable(context: CanvasRenderingContext2D, object: DrawableObject)
       break;
     }
     case "text": {
-      context.font = `700 ${object.fontSize}px system-ui, sans-serif`;
-      context.textBaseline = "alphabetic";
       if (object.fill !== "none") context.fillText(object.value, object.x, object.y);
       if (object.stroke && object.stroke !== "none") context.strokeText(object.value, object.x, object.y);
       break;
@@ -84,12 +74,13 @@ function drawDrawable(context: CanvasRenderingContext2D, object: DrawableObject)
   }
 }
 
-function drawSelection(context: CanvasRenderingContext2D, object: DrawableObject, stroke: string) {
-  context.strokeStyle = stroke;
-  context.lineWidth = 4;
-  context.setLineDash([7, 5]);
-  context.lineCap = "butt";
-  context.lineJoin = "round";
+function drawSelection(
+  context: CanvasRenderingContext2D,
+  state: CanvasStateCache,
+  object: DrawableObject,
+  stroke: string,
+) {
+  state.applySelection(stroke, object);
   switch (object.kind) {
     case "rectangle":
       context.beginPath();
@@ -106,31 +97,27 @@ function drawSelection(context: CanvasRenderingContext2D, object: DrawableObject
       context.stroke(pathFor(object));
       break;
     case "text":
-      context.font = `700 ${object.fontSize}px system-ui, sans-serif`;
-      context.textBaseline = "alphabetic";
       context.strokeText(object.value, object.x, object.y);
       break;
   }
-  context.setLineDash([]);
 }
 
 function drawItem(
   context: CanvasRenderingContext2D,
+  state: CanvasStateCache,
   item: RenderItem,
   layerOpacity: number,
   selected: boolean,
   selectionStroke: string,
 ) {
   const [a, b, c, d, e, f] = item.matrix;
-  context.save();
   context.setTransform(a, b, c, d, e, f);
-  context.globalAlpha = item.opacity * layerOpacity;
-  drawDrawable(context, item.object);
+  state.setGlobalAlpha(item.opacity * layerOpacity);
+  drawDrawable(context, state, item.object);
   if (selected) {
-    context.globalAlpha = 1;
-    drawSelection(context, item.object, selectionStroke);
+    state.setGlobalAlpha(1);
+    drawSelection(context, state, item.object, selectionStroke);
   }
-  context.restore();
 }
 
 function prepareCanvas(canvas: HTMLCanvasElement, width: number, height: number, background: string | null) {
@@ -155,6 +142,7 @@ export function drawCompositionToCanvas(
   background: string | null = "#ffffff",
 ) {
   const context = prepareCanvas(canvas, composition.width, composition.height, background);
+  const state = new CanvasStateCache(context);
   const selection = new Set(selectedIds);
   const selectionStroke = selection.size > 0
     ? getComputedStyle(canvas).getPropertyValue("--accent").trim() || "#7c9cff"
@@ -163,7 +151,7 @@ export function drawCompositionToCanvas(
   for (const layer of composition.layers) {
     const allowSelection = layer.kind === "current";
     for (const item of layer.frame.items) {
-      drawItem(context, item, layer.opacity, allowSelection && selection.has(item.id), selectionStroke);
+      drawItem(context, state, item, layer.opacity, allowSelection && selection.has(item.id), selectionStroke);
     }
   }
 
@@ -194,6 +182,14 @@ function canvasPoint(event: ReactPointerEvent<HTMLCanvasElement>, canvas: HTMLCa
   };
 }
 
+function applyHitTestStroke(context: CanvasRenderingContext2D, object: DrawableObject) {
+  if (!object.stroke || object.stroke === "none") return;
+  context.lineWidth = object.strokeWidth ?? 1;
+  context.lineCap = object.strokeLinecap ?? "butt";
+  context.lineJoin = object.strokeLinejoin ?? "miter";
+  context.setLineDash([]);
+}
+
 function textContains(context: CanvasRenderingContext2D, object: TextObject, point: Point) {
   context.save();
   context.setTransform(1, 0, 0, 1, 0, 0);
@@ -213,7 +209,7 @@ function complexHitTester(context: CanvasRenderingContext2D): ComplexShapeHitTes
     pathContains: (object, point) => {
       context.save();
       context.setTransform(1, 0, 0, 1, 0, 0);
-      applyPaint(context, object);
+      applyHitTestStroke(context, object);
       const path = pathFor(object);
       const fillHit = object.fill !== "none" && context.isPointInPath(path, point.x, point.y);
       const strokeHit = Boolean(object.stroke && object.stroke !== "none") && context.isPointInStroke(path, point.x, point.y);
