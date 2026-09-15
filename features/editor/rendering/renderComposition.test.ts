@@ -29,9 +29,14 @@ describe("render composition", () => {
     ])).toThrow("same dimensions");
   });
 
-  it("requires a hit-testable frame", () => {
+  it("requires exactly one hit-testable frame", () => {
     expect(() => buildRenderComposition([
       { kind: "onion-previous", document: fixtureDocument, opacity: 0.18, hitTestable: false },
-    ])).toThrow("hit-testable");
+    ])).toThrow("exactly one hit-testable");
+
+    expect(() => buildRenderComposition([
+      { kind: "current", document: fixtureDocument, opacity: 1, hitTestable: true },
+      { kind: "onion-next", document: fixtureDocument, opacity: 0.12, hitTestable: true },
+    ])).toThrow("exactly one hit-testable");
   });
 });
