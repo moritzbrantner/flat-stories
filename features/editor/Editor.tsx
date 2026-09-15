@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { isEditorEditableTarget, matchesEditorHotkey } from "@moenarch/editor-core/hotkeys";
 import { sampleAnimation } from "./animation";
 import { keyframePose, keyframeProperty, removeKeyframeAtTime, removeTrackKeyframe, updateTrackKeyframe } from "./animationAuthoring";
@@ -19,6 +19,7 @@ import { PlaybackControls } from "./PlaybackControls";
 import { applyCharacterPose, applyExpression, captureCharacterPose, captureExpression, upsertExpression, upsertPose } from "./poses";
 import { ProjectControls } from "./ProjectControls";
 import { PropertyKeyControls } from "./PropertyKeyControls";
+import { AnimationCanvasPreview } from "./rendering/AnimationCanvasPreview";
 import {
   duplicateSiblingObjects,
   findObject,
@@ -48,6 +49,8 @@ type DocumentUpdate = EditorDocument | ((document: EditorDocument) => EditorDocu
 type Viewport = Point & { zoom: number };
 type DragState = { id: string; pointer: Point; transform: Transform; basisRotation: number };
 type PathHandle = "inHandle" | "outHandle";
+type PreviewRenderer = "canvas" | "svg";
+type PreviewBackend = "typescript" | "rust-wasm";
 
 type OnionSkinFrame = {
   kind: "previous" | "next";
@@ -91,6 +94,9 @@ export function Editor({ initialDocument }: EditorProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [onionSkinEnabled, setOnionSkinEnabled] = useState(false);
   const [onionSkinOffset, setOnionSkinOffset] = useState(0.1);
+  const [previewRenderer, setPreviewRenderer] = useState<PreviewRenderer>("canvas");
+  const [previewBackend, setPreviewBackend] = useState<PreviewBackend>("typescript");
+  const [canvasPreviewFailed, setCanvasPreviewFailed] = useState(false);
   const panStart = useRef<{ pointer: Point; viewport: Point } | null>(null);
   const objectDrag = useRef<DragState | null>(null);
   const idCounter = useRef(0);
@@ -116,7 +122,34 @@ export function Editor({ initialDocument }: EditorProps) {
   const canGroup = selectedIds.length > 1 && selectedIds.every((id) => rootIds.has(id));
   const canUngroup = selectedIds.length === 1 && rootIds.has(selectedIds[0]) && selected?.kind === "group";
   const editingEnabled = clipId === null;
+  const useCanvasPreview = !editingEnabled && previewRenderer === "canvas" && !canvasPreviewFailed && !onionSkinEnabled;
   const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);
+  const previewStatus = useCanvasPreview
+    ? `Canvas · ${previewBackend === "rust-wasm" ? "Rust/WASM" : "TypeScript"}`
+    : previewRenderer === "canvas" && onionSkinEnabled
+      ? "SVG reference · onion skin"
+      : previewRenderer === "canvas" && canvasPreviewFailed
+        ? "SVG reference · Canvas unavailable"
+        : "SVG reference";
+
+  const handlePreviewSelection = useCallback((id: string | null, additive: boolean) => {
+    if (!id) {
+      setSelectedIds([]);
+      return;
+    }
+    setSelectedIds((current) => {
+      if (!additive) return [id];
+      return current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id];
+    });
+  }, []);
+
+  const handlePreviewBackendChange = useCallback((backend: PreviewBackend) => {
+    setPreviewBackend(backend);
+  }, []);
+
+  const handlePreviewFailure = useCallback(() => {
+    setCanvasPreviewFailed(true);
+  }, []);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -142,6 +175,7 @@ export function Editor({ initialDocument }: EditorProps) {
     setCurrentTime(0);
     setOnionSkinEnabled(false);
     setOnionSkinOffset(0.1);
+    setCanvasPreviewFailed(false);
     panStart.current = null;
     objectDrag.current = null;
     idCounter.current = 0;
@@ -389,6 +423,13 @@ export function Editor({ initialDocument }: EditorProps) {
       <div className="topbar-actions">
         <button type="button" aria-pressed={snapToGrid} onClick={() => setSnapToGrid((current) => !current)}>Snap 10</button>
         <button type="button" aria-pressed={showRig} onClick={() => setShowRig((current) => !current)}>Rig</button>
+        {!editingEnabled ? <button type="button" aria-label="Preview renderer" onClick={() => {
+          if (previewRenderer === "canvas") setPreviewRenderer("svg");
+          else {
+            setCanvasPreviewFailed(false);
+            setPreviewRenderer("canvas");
+          }
+        }}>{previewRenderer === "canvas" ? "Preview Canvas" : "Preview SVG"}</button> : null}
         <button type="button" disabled={!canUndo} onClick={() => { undo(); setSelectedIds([]); }}>Undo</button>
         <button type="button" disabled={!canRedo} onClick={() => { redo(); setSelectedIds([]); }}>Redo</button>
         <ProjectControls document={document} onLoad={loadProject} />
@@ -407,6 +448,7 @@ export function Editor({ initialDocument }: EditorProps) {
     </aside>
 
     <section className="canvas-region" aria-label="Canvas workspace"
+      data-preview-renderer={editingEnabled ? "svg-editing" : useCanvasPreview ? "canvas" : "svg"}
       onWheel={(event) => {
         event.preventDefault();
         setViewport((current) => ({ ...current, zoom: Math.min(3, Math.max(0.2, current.zoom * (event.deltaY > 0 ? 0.9 : 1.1))) }));
@@ -422,7 +464,15 @@ export function Editor({ initialDocument }: EditorProps) {
         if (start) setViewport((current) => ({ ...current, x: start.viewport.x + event.clientX - start.pointer.x, y: start.viewport.y + event.clientY - start.pointer.y }));
       }}
       onPointerUp={() => { panStart.current = null; }}>
-      <svg className="artboard" aria-label={document.name} width={document.width} height={document.height}
+      {useCanvasPreview ? <AnimationCanvasPreview
+        document={displayDocument}
+        selectedIds={selectedIds}
+        viewport={viewport}
+        showRig={showRig}
+        onSelectionChange={handlePreviewSelection}
+        onBackendChange={handlePreviewBackendChange}
+        onRenderFailure={handlePreviewFailure}
+      /> : <svg className="artboard" aria-label={document.name} width={document.width} height={document.height}
         viewBox={`0 0 ${document.width} ${document.height}`}
         style={{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})` }}
         onPointerDown={(event) => { if (event.target === event.currentTarget) setSelectedIds([]); }}>
@@ -462,7 +512,7 @@ export function Editor({ initialDocument }: EditorProps) {
           onPathToggleHandles={(pathId, anchorId) => updatePath(pathId, (path) => togglePathHandles(path, anchorId))}
         />)}
         {showRig && displayDocument.rig ? <RigOverlay rig={displayDocument.rig} /> : null}
-      </svg>
+      </svg>}
     </section>
 
     <aside className="inspector" aria-label="Inspector">
@@ -522,7 +572,7 @@ export function Editor({ initialDocument }: EditorProps) {
           <option value="">Rest pose</option>
           {document.animations.map((clip) => <option key={clip.id} value={clip.id}>{clip.name}</option>)}
         </select>
-        <output>{currentTime.toFixed(2)}s{selectedClip ? ` / ${selectedClip.duration.toFixed(2)}s` : ""}</output>
+        <output>{currentTime.toFixed(2)}s{selectedClip ? ` / ${selectedClip.duration.toFixed(2)}s · ${previewStatus}` : ""}</output>
       </div>
       <PlaybackControls key={selectedClip?.id ?? "rest"} clip={selectedClip} currentTime={currentTime} onTimeChange={setCurrentTime} />
       <OnionSkinControls enabled={onionSkinEnabled} offsetSeconds={onionSkinOffset} clipSelected={Boolean(selectedClip)}

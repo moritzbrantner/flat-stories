@@ -26,6 +26,8 @@ button:disabled { cursor: not-allowed !important; opacity: .4; }
 .toolbar button span { font-size: 1.15rem; font-weight: 800; }
 .canvas-region { grid-area: canvas; position: relative; overflow: hidden; background-color: #242832; background-image: linear-gradient(45deg, #292e39 25%, transparent 25%), linear-gradient(-45deg, #292e39 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #292e39 75%), linear-gradient(-45deg, transparent 75%, #292e39 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0; touch-action: none; }
 .artboard { position: absolute; transform-origin: 0 0; background: white; box-shadow: 0 12px 40px #0007; user-select: none; }
+.preview-canvas { cursor: default; }
+.preview-rig-overlay { background: transparent; box-shadow: none; pointer-events: none; }
 .artboard [data-node-id] { cursor: move; }
 .selected-object { stroke: var(--accent) !important; stroke-width: 4 !important; paint-order: stroke; stroke-dasharray: 7 5; }
 .transform-overlay { vector-effect: non-scaling-stroke; }
