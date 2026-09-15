@@ -1,11 +1,17 @@
 # Flat Stories
 
-A browser-based flat-design SVG character editor. The product goal is to make original 2D characters, reusable rigs, poses, and short SVG animations with a focused Figma-like desktop workflow.
+A browser-based flat-design vector character editor. The product goal is to make original 2D characters, reusable rigs, poses, and short animations with a focused Figma-like desktop workflow while keeping SVG as a first-class interchange and reference format.
 
 ```sh
 bun install --frozen-lockfile
 bun run dev
 bun run check
+```
+
+Renderer work also has a dedicated deterministic benchmark:
+
+```sh
+bun run bench:renderer
 ```
 
 For coordinated work with sibling editor foundations, use source mode instead of waiting for package publication:
@@ -20,26 +26,37 @@ Source mode expects sibling `editor-core/` and `layer-editor/` checkouts by defa
 
 ## Product direction
 
-Flat Stories is deliberately not a generic graphics framework. It specializes a small SVG scene graph for character illustration and animation:
+Flat Stories is deliberately not a generic graphics framework. It specializes a small vector scene graph for character illustration and animation:
 
 - hierarchical vector scene nodes with stable IDs and local transforms;
 - direct manipulation, grouping, layers, visibility, locking, and styling;
 - explicit character bones with rest/current pose and joint limits;
 - deterministic two-bone IK constraints for arms and legs;
 - typed animation clips and numeric keyframes;
-- SVG as the primary rendering and eventual animated interchange target.
+- SVG DOM as the semantic/reference renderer and SVG as an interchange target;
+- optimized runtime rendering through renderer-neutral frames, initially Canvas 2D backed by a Rust/WASM transform kernel.
 
-The bundled `Nova character study` fixture dogfoods the model with nested artwork, a complete limb skeleton, two hand IK targets, and a looping wave/head-sway clip.
+The bundled `Nova character study` fixture dogfoods the model with nested artwork, a complete limb skeleton, two hand IK targets, and a looping wave/head-sway clip. `/renderer-lab` renders that same character side-by-side through SVG DOM and Canvas/WASM and provides a representative browser benchmark.
 
 ## Architecture boundary
 
-React owns browser input, transient product interaction state, panels, selection UI, timeline UI, and SVG DOM rendering. `features/editor/engine.ts` remains the small computational seam for workloads that may later justify Rust/WASM. The serialized document model stays plain data.
+`EditorDocument` is the only authoritative scene. React owns browser input, transient product interaction state, panels, selection UI, timeline UI, and editor overlays. SVG DOM nodes, Canvas commands, and WASM buffers are adapters over that document rather than parallel models.
 
-Flat Stories owns SVG/character vocabulary and the one canonical nested scene graph: scene nodes, paint, character, rig, IK constraints, poses, animation clips, project validation/versioning, and SVG interchange. Generic document-operation history, undo/redo, merged interaction transactions, hotkey helpers, and browser file mechanics come from `@moenarch/editor-core` rather than being reimplemented locally.
+The editor keeps its SVG DOM surface as a reliable direct-manipulation/reference backend while optimized playback/render workloads use `features/editor/rendering/renderFrame.ts`. The initial optimized path flattens the canonical visible scene into a compact transform stream, evaluates world transforms and rig attachments through a Rust/WASM kernel, and draws the resulting frame with Canvas 2D. A TypeScript implementation of the same transform ABI is the deterministic fallback and correctness reference for the Rust kernel.
+
+This is intentionally a staged renderer architecture rather than a claim that all graphics now run in Rust. Path tessellation, deformation, hit-testing, batching, and a WebGL/WebGPU backend should move behind the same frame contract only when representative profiling shows they matter. See `docs/renderer.md`.
+
+Flat Stories owns vector/character vocabulary and the one canonical nested scene graph: scene nodes, paint, character, rig, IK constraints, poses, animation clips, project validation/versioning, rendering semantics, and SVG interchange. Generic document-operation history, undo/redo, merged interaction transactions, hotkey helpers, and browser file mechanics come from `@moenarch/editor-core` rather than being reimplemented locally.
 
 `@moritzbrantner/layer-editor` is consumed through `features/editor/layerAdapter.ts`. The adapter projects the canonical recursive Flat Stories scene into generic layer rows and delegates generic sibling-order mechanics, but it does not create a second persisted layer document. The current shared layer model cannot faithfully represent arbitrarily nested Flat Stories groups, so the projection remains non-authoritative and hierarchy-changing operations stay on the canonical scene graph until the shared boundary can represent them without loss.
 
-Rust/WASM is still workload-driven. Do not move the React state tree, DOM rendering, or pointer handling into Rust. Geometry kernels such as path booleans, path normalization, hit-testing, or deformation may move behind `EditorEngine` once profiling shows a concrete reason.
+## Renderer evidence
+
+Renderer correctness and performance are intentionally separate concerns.
+
+`bun run bench:renderer` builds the Rust/WASM kernel, encodes a deterministic replicated-character workload, checks the Rust output against the TypeScript reference within a small numerical tolerance, and only then records timings. CI stores the benchmark output as an artifact; ordinary correctness does not fail because of noisy shared-runner wall-clock performance.
+
+The `/renderer-lab` page compares the SVG DOM reference with Canvas using the same sampled animation. Its browser benchmark updates 36 character copies across 60 deterministic pre-sampled frames and reports the observed ratio. The numbers are evidence for future renderer decisions rather than a hard threshold.
 
 ## Implementation horizon
 
@@ -51,12 +68,14 @@ Keep implementation in small independently verifiable slices. The current horizo
 4. **Complete — individual property keying:** key one selected node property or rig-bone rotation at the current timeline time without requiring a whole saved pose; reuse existing logical tracks when present.
 5. **Complete — playback controls:** deterministic play/pause progression, restart, and authored clip-loop behavior without changing animation data.
 6. **Complete — editable preview loop ranges:** enable a transient playback-only start/end range without changing duration, loop metadata, tracks, or keyframes.
-7. **Complete — onion skinning:** sample previous/next animation times and render those documents as translucent, pointer-disabled SVG context through the same scene renderer.
+7. **Complete — onion skinning:** sample previous/next animation times and render those documents as translucent, pointer-disabled SVG context through the same scene semantics.
 8. **Complete — deterministic static SVG export:** serialize the current canonical/sampled visual document to standalone SVG with stable ordering, supported paint/transforms/rig attachments, and no editor overlays or metadata.
 9. **Complete — project persistence foundation:** versioned deterministic `.flatstories.json` serialization/parsing with strict v1 model validation plus reusable browser Save/Load controls.
 10. **Complete — editor load integration:** validated project loads replace live authored Editor state while clearing selection, animation-preview, onion-skin, and in-progress pointer transients without rewriting imported authored data.
-11. **Now — static SVG import:** parse the supported SVG subset back into the canonical scene graph with explicit unsupported-feature handling.
-12. **After — animated SVG export:** encode the supported numeric animation subset into self-contained SVG animation.
+11. **Complete — renderer foundation slice:** SVG DOM reference renderer, renderer-neutral scene frame, TypeScript fallback transform kernel, Rust/WASM transform kernel, Canvas 2D backend, browser comparison lab, and recorded benchmark evidence.
+12. **Now — static SVG import:** parse the supported SVG subset back into the canonical scene graph with explicit unsupported-feature handling.
+13. **After — animated SVG export:** encode the supported numeric animation subset into self-contained SVG animation.
+14. **After measured need — renderer acceleration:** move the strongest measured path/tessellation/deformation/batching bottleneck into Rust and evaluate a GPU backend without changing authored scene semantics.
 
 Do not pull later-horizon concerns into an earlier slice unless a concrete blocker proves the boundary wrong.
 
@@ -75,8 +94,9 @@ A successful load replaces only authored document state. Selection, sampled anim
 5. **Animation timeline** — editable tracks/keyframes, easing curves, playback, onion skinning, copy/paste and loop regions. The typed clip model, scrub preview, deterministic pose-keying operations, pose-keyframing controls, direct existing-keyframe inspector, individual property keying, deterministic playback, transient preview loop ranges, and neighboring-frame onion skins are present.
 6. **Character animation workflows** — reusable blink/idle/wave/walk/talk clips, pose keyframes, mirroring and character instances.
 7. **SVG persistence/interchange** — deterministic project JSON, supported SVG import/export, then self-contained animated SVG export for supported tracks. Static SVG export and project save/load are complete; supported SVG import is next.
-8. **Dogfood a complete original mascot** — build and animate a production-scale character entirely in Flat Stories and turn friction into focused follow-ups.
-9. **Advanced deformation only when justified** — path morphing, two-dimensional deformation, mesh skinning, motion paths, richer IK and secondary motion.
+8. **Runtime rendering** — keep SVG DOM as reference/editing fallback; evolve the Canvas/Rust-WASM backend from transform preparation toward measured path/deformation/GPU workloads while preserving one scene authority.
+9. **Dogfood a complete original mascot** — build and animate a production-scale character entirely in Flat Stories and turn friction into focused follow-ups.
+10. **Advanced deformation only when justified** — path morphing, two-dimensional deformation, mesh skinning, motion paths, richer IK and secondary motion.
 
 ## Editing versus preview
 
@@ -84,4 +104,4 @@ The rest pose is the authored editing state. Selecting an animation clip switche
 
 ## Current verification focus
 
-Pure scene-graph, vector-path, geometry, snapping, animation, animation-authoring, playback/range, onion-skin timing, SVG export, project serialization/validation, pose/expression, rig math, and shared-layer projection are deterministic and covered independently from React. Browser-focused tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, shared undo/redo, pose/expression authoring, pose keyframing, direct keyframe editing, individual property keying, playback controls, preview loop ranges, pointer-disabled onion skins, SVG/project persistence controls, live project-load transient resets, animation-preview isolation, rig controls, and timeline entry points.
+Pure scene-graph, vector-path, geometry, snapping, animation, animation-authoring, playback/range, onion-skin timing, SVG export, project serialization/validation, pose/expression, rig math, shared-layer projection, and renderer-frame behavior are deterministic and covered independently from React. Rust renderer tests cover transform composition and fail-closed parent ordering. Browser-focused tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, shared undo/redo, pose/expression authoring, pose keyframing, direct keyframe editing, individual property keying, playback controls, preview loop ranges, pointer-disabled onion skins, SVG/project persistence controls, live project-load transient resets, animation-preview isolation, rig controls, and timeline entry points.

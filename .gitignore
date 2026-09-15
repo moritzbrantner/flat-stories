@@ -1,5 +1,8 @@
 .next/
 .source/
+.renderer-target/
+renderer-wasm/target/
+public/renderer/*.wasm
 out/
 node_modules/
 coverage/

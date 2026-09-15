@@ -17,6 +17,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.21
+      - name: Set up Rust renderer toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown
       - name: Set up repository environment
         run: bash scripts/codex-environment.sh setup
       - name: Verify canonical gate
