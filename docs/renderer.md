@@ -51,7 +51,9 @@ SVG remains the higher-level semantic reference. Canvas text rasterization and S
 There are two deliberately separate measurement surfaces:
 
 - `bun run bench:renderer` compares the TypeScript and Rust/WASM transform kernels on the same deterministic replicated-character workload. The same artifact also compares the old serialize-every-lookup path-cache strategy with immutable identity lookup on the same production-shaped scene. Both comparisons verify semantic parity/checksums first and print timing evidence without enforcing a speed threshold.
-- `/renderer-lab` renders the same animated Nova scene through SVG DOM and Canvas, and can run a browser benchmark over 36 character copies and 60 pre-sampled frames. The SVG side forces a geometry flush so the comparison includes DOM/render work rather than only React scheduling.
+- `/renderer-lab` uses 36 character copies and 60 pre-sampled animation frames to measure the actual browser boundary. It reports four independent loops over the same frames: SVG DOM update plus geometry flush, complete Canvas rendering, renderer-frame preparation alone, and Canvas API drawing from already-prepared frames. This makes the larger remaining Canvas stage visible before another backend or batching strategy is chosen.
+
+The browser stage numbers are deliberately not added together: each stage is measured in a separate loop to reduce instrumentation coupling, while the complete Canvas pass remains the end-to-end comparison. The lab exposes labeled outputs so a future browser-automation layer can capture the same evidence without redefining the workload.
 
 The CI benchmark workflow stores CPU evidence as an artifact. Ordinary correctness CI does not fail because a shared runner happened to be slower or faster on one run.
 
@@ -59,4 +61,4 @@ The CI benchmark workflow stores CPU evidence as an artifact. Ordinary correctne
 
 Flat Stories owns character/vector render semantics and the adapter from its scene graph to render frames. Generic geometry kernels may move to `rust-packages` once they are reusable independently of Flat Stories. `viz-engine` remains a data/frame computation engine for visualization consumers and is not made authoritative for character graphics.
 
-The next renderer work should continue to be chosen from measurements. Path tessellation/batching and Canvas draw-call cost are the likely remaining candidates on production-scale character scenes; WebGPU/WebGL should follow only when those measurements show Canvas 2D itself is the bottleneck.
+The next renderer optimization should follow the stage evidence. If frame preparation still dominates, improve that boundary or move a measured kernel to Rust. If Canvas API drawing dominates, first reduce state/draw churn or compile stable draw metadata; only introduce WebGL/WebGPU when the browser evidence shows Canvas 2D itself is the limiting backend.
