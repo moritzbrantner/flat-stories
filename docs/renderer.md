@@ -4,19 +4,23 @@ Flat Stories has one authored scene and multiple renderers. The serialized `Edit
 
 ## Backends
 
-### SVG DOM reference
+### SVG DOM reference and editing surface
 
-`features/editor/rendering/SvgScene.tsx` is the semantic/reference renderer. It is deliberately straightforward and keeps the browser-native SVG representation available for editing, accessibility/debugging, interchange work, and regression comparison.
+`features/editor/rendering/SvgScene.tsx` is the semantic/reference renderer. The editor also keeps its SVG artboard for rest-pose direct manipulation, accessibility/debugging, interchange work, and regression comparison. SVG remains selectable as an explicit animation-preview reference path.
 
-The editor's direct-manipulation canvas can continue using SVG while the optimized runtime path matures. This avoids coupling pointer/overlay mechanics to the performance experiment.
+The important boundary is that SVG DOM is no longer the only runtime presentation of the authored scene. Editing overlays and pointer-heavy geometry authoring stay on SVG until an optimized backend can preserve those semantics rather than merely drawing the same pixels.
 
 ### Canvas 2D + Rust/WASM
 
-`features/editor/rendering/CanvasScene.tsx` consumes a renderer-neutral frame prepared by `renderFrame.ts`. The initial Rust crate, `renderer-wasm`, computes hierarchical world transforms, rig attachment transforms, and inherited opacity over a compact `Float32Array` ABI. TypeScript owns browser integration and Canvas drawing.
+`features/editor/rendering/CanvasScene.tsx` consumes a renderer-neutral frame prepared by `renderFrame.ts`. The Rust crate, `renderer-wasm`, computes hierarchical world transforms, rig attachment transforms, and inherited opacity over a compact `Float32Array` ABI. TypeScript owns browser integration and Canvas drawing.
 
-A TypeScript transform kernel implements the same ABI and serves two purposes: deterministic fallback when WASM cannot load and a readable reference against which Rust output can be checked.
+A TypeScript transform kernel implements the same ABI and serves as deterministic fallback when WASM cannot load and as the readable reference against which Rust output is checked. If Canvas 2D itself cannot render, the editor falls back to SVG rather than leaving animation preview unusable.
 
-Canvas interaction now consumes the same prepared render frame instead of reconstructing scene semantics. `hitTest.ts` inverse-transforms the pointer into each drawable's local space, walks draw order from front to back, handles rectangle/circle geometry deterministically, and delegates path/text containment to the Canvas backend. Selection highlighting is drawn by Canvas rather than requiring a hidden SVG duplicate. The renderer lab dogfoods this by allowing direct selection on the animated Canvas scene.
+Canvas interaction consumes the same prepared render frame instead of reconstructing scene semantics. `hitTest.ts` inverse-transforms the pointer into each drawable's local space, walks draw order from front to back, handles rectangle/circle geometry deterministically, and delegates path/text containment to the Canvas backend. Selection highlighting is drawn by Canvas rather than requiring a hidden SVG duplicate.
+
+`AnimationCanvasPreview.tsx` is the editor adapter. Animation clips use Canvas by default, retain node selection for property-key authoring, and layer only the lightweight rig visualization as transparent SVG. Rest-pose editing remains SVG. The top bar can switch animation preview back to the SVG reference renderer at any time.
+
+Onion skinning deliberately uses the SVG reference path for now. That preserves the existing compositing semantics while the optimized renderer grows a first-class multi-frame/layer composition contract; it avoids quietly changing onion-skin behavior merely to increase Canvas coverage.
 
 This still does not claim that the whole rasterizer lives in Rust. Path tessellation, deformation, batching, complex hit-testing kernels, and eventually a WebGPU/WebGL backend may move behind the same render-frame contract when representative measurements justify them.
 
@@ -41,4 +45,4 @@ The CI benchmark workflow stores the kernel measurement as an artifact. Ordinary
 
 Flat Stories owns character/vector render semantics and the adapter from its scene graph to render frames. Generic geometry kernels may move to `rust-packages` once they are reusable independently of Flat Stories. `viz-engine` remains a data/frame computation engine for visualization consumers and is not made authoritative for character graphics.
 
-The next editor integration step is to switch read-only animation preview to Canvas/WASM while retaining SVG for rest-pose editing and as an explicit reference fallback. That switch should preserve node selection, property-key authoring, onion-skin semantics, and rig overlays rather than trading behavior for benchmark numbers.
+The next optimized-renderer slice is multi-frame composition for onion skins. It should reuse the same frame contract and make opacity/layer order explicit before the editor stops falling back to SVG for that mode.
