@@ -43,11 +43,18 @@ export function RendererLab() {
 
   useEffect(() => {
     if (!kernelReady || new URLSearchParams(window.location.search).get("benchmark") !== "1") return;
-    setPlaying(false);
-    const timer = window.setTimeout(() => {
-      document.querySelector<HTMLButtonElement>("[data-run-renderer-benchmark]")?.click();
+    let benchmarkTimer = 0;
+    const pauseTimer = window.setTimeout(() => {
+      const playback = document.querySelector<HTMLButtonElement>("[data-toggle-renderer-playback]");
+      if (playback?.textContent === "Pause") playback.click();
+      benchmarkTimer = window.setTimeout(() => {
+        document.querySelector<HTMLButtonElement>("[data-run-renderer-benchmark]")?.click();
+      }, 0);
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(pauseTimer);
+      window.clearTimeout(benchmarkTimer);
+    };
   }, [kernelReady]);
 
   useEffect(() => {
@@ -136,7 +143,7 @@ export function RendererLab() {
     </header>
 
     <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
-      <button type="button" onClick={() => setPlaying((current) => !current)}>{playing ? "Pause" : "Play"}</button>
+      <button type="button" data-toggle-renderer-playback onClick={() => setPlaying((current) => !current)}>{playing ? "Pause" : "Play"}</button>
       <input aria-label="Renderer lab time" type="range" min={0} max={clip.duration} step={0.01} value={time}
         onChange={(event) => { setPlaying(false); setTime(Number(event.target.value)); }} />
       <output>{time.toFixed(2)}s / {clip.duration.toFixed(2)}s</output>
