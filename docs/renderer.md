@@ -53,9 +53,11 @@ There are two deliberately separate measurement surfaces:
 - `bun run bench:renderer` compares the TypeScript and Rust/WASM transform kernels on the same deterministic replicated-character workload. The same artifact also compares the old serialize-every-lookup path-cache strategy with immutable identity lookup on the same production-shaped scene. Both comparisons verify semantic parity/checksums first and print timing evidence without enforcing a speed threshold.
 - `/renderer-lab` uses 36 character copies and 60 pre-sampled animation frames to measure the actual browser boundary. It reports four independent loops over the same frames: SVG DOM update plus geometry flush, complete Canvas rendering, renderer-frame preparation alone, and Canvas API drawing from already-prepared frames. This makes the larger remaining Canvas stage visible before another backend or batching strategy is chosen.
 
-The browser stage numbers are deliberately not added together: each stage is measured in a separate loop to reduce instrumentation coupling, while the complete Canvas pass remains the end-to-end comparison. The lab exposes labeled outputs so a future browser-automation layer can capture the same evidence without redefining the workload.
+The browser stage numbers are deliberately not added together: each stage is measured in a separate loop to reduce instrumentation coupling, while the complete Canvas pass remains the end-to-end comparison. A `?benchmark=1` mode waits for the browser WASM backend, runs the same lab workload automatically, and exposes the exact result as machine-readable JSON in the rendered document.
 
-The CI benchmark workflow stores CPU evidence as an artifact. Ordinary correctness CI does not fail because a shared runner happened to be slower or faster on one run.
+`bun run bench:renderer:browser` serves the built static export locally, launches an available Chrome/Chromium in headless mode, requires the `rust-wasm` backend and the fixed 36-copy/60-frame workload, validates all numeric outputs, and writes JSON plus the captured DOM. The `Browser Renderer Benchmark` workflow uploads those files as evidence. It can fail when the benchmark contract or browser integration is broken, but it never compares a timing value with a pass/fail threshold.
+
+The CPU renderer benchmark remains a separate artifact. Ordinary correctness CI does not fail because a shared runner happened to be slower or faster on one run.
 
 ## Ownership
 
