@@ -29,6 +29,9 @@ export function buildRenderComposition(
   if (layers.length === 0) throw new Error("Render composition requires at least one layer.");
   const width = layers[0].document.width;
   const height = layers[0].document.height;
+  const hitTestableCount = layers.filter((layer) => layer.hitTestable).length;
+  if (hitTestableCount !== 1) throw new Error("Render composition requires exactly one hit-testable layer.");
+
   const prepared = layers.map((layer) => {
     if (layer.document.width !== width || layer.document.height !== height) {
       throw new Error("Render composition layers must share the same dimensions.");
@@ -43,7 +46,6 @@ export function buildRenderComposition(
       frame: buildRenderFrame(layer.document, kernel),
     };
   });
-  const hitTestLayer = [...prepared].reverse().find((layer) => layer.hitTestable);
-  if (!hitTestLayer) throw new Error("Render composition requires one hit-testable layer.");
+  const hitTestLayer = prepared.find((layer) => layer.hitTestable)!;
   return { width, height, layers: prepared, hitTestFrame: hitTestLayer.frame };
 }
