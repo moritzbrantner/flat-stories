@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import type { DrawableObject, EditorDocument, PathObject, Point, TextObject } from "../model";
-import { pathToSvg } from "../vectorPath";
 import { hitTestRenderFrame, type ComplexShapeHitTester } from "./hitTest";
+import { createPreparedPathCache } from "./pathPreparation";
 import {
   buildRenderComposition,
   type RenderComposition,
@@ -32,15 +32,10 @@ type CanvasSceneProps = {
   onRenderFailure?: (error: Error) => void;
 };
 
-const pathCache = new Map<string, { source: string; path: Path2D }>();
+const pathCache = createPreparedPathCache((source) => new Path2D(source));
 
 function pathFor(object: PathObject): Path2D {
-  const source = pathToSvg(object.path);
-  const cached = pathCache.get(object.id);
-  if (cached?.source === source) return cached.path;
-  const path = new Path2D(source);
-  pathCache.set(object.id, { source, path });
-  return path;
+  return pathCache.get(object.path);
 }
 
 function applyPaint(context: CanvasRenderingContext2D, object: DrawableObject) {
