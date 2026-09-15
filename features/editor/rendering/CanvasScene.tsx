@@ -13,8 +13,11 @@ type CanvasSceneProps = {
   className?: string;
   style?: CSSProperties;
   selectedIds?: readonly string[];
+  background?: string | null;
   onBackendChange?: (backend: TransformKernel["name"]) => void;
   onNodePointerDown?: (id: string, event: ReactPointerEvent<HTMLCanvasElement>) => void;
+  onEmptyPointerDown?: (event: ReactPointerEvent<HTMLCanvasElement>) => void;
+  onRenderFailure?: (error: Error) => void;
 };
 
 const pathCache = new Map<string, { source: string; path: Path2D }>();
@@ -122,6 +125,7 @@ export function drawDocumentToCanvas(
   document: EditorDocument,
   kernel: TransformKernel,
   selectedIds: readonly string[] = [],
+  background: string | null = "#ffffff",
 ) {
   if (canvas.width !== document.width) canvas.width = document.width;
   if (canvas.height !== document.height) canvas.height = document.height;
@@ -130,8 +134,10 @@ export function drawDocumentToCanvas(
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.globalAlpha = 1;
   context.clearRect(0, 0, document.width, document.height);
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, document.width, document.height);
+  if (background !== null) {
+    context.fillStyle = background;
+    context.fillRect(0, 0, document.width, document.height);
+  }
 
   const frame = buildRenderFrame(document, kernel);
   const selection = new Set(selectedIds);
@@ -190,22 +196,57 @@ export function hitTestCanvasFrame(canvas: HTMLCanvasElement, frame: RenderFrame
   return hitTestRenderFrame(frame, point, complexHitTester(context));
 }
 
-export function CanvasScene({ document, kernel, className, style, selectedIds = [], onBackendChange, onNodePointerDown }: CanvasSceneProps) {
+function asError(error: unknown) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+export function CanvasScene({
+  document,
+  kernel,
+  className,
+  style,
+  selectedIds = [],
+  background = "#ffffff",
+  onBackendChange,
+  onNodePointerDown,
+  onEmptyPointerDown,
+  onRenderFailure,
+}: CanvasSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const documentRef = useRef(document);
   const selectedIdsRef = useRef(selectedIds);
+  const backgroundRef = useRef(background);
   const frameRef = useRef<RenderFrame | null>(null);
   const kernelRef = useRef<TransformKernel>(kernel ?? referenceTransformKernel);
 
   useEffect(() => {
     documentRef.current = document;
     selectedIdsRef.current = selectedIds;
-  }, [document, selectedIds]);
+    backgroundRef.current = background;
+  }, [background, document, selectedIds]);
+
+  function draw(activeKernel: TransformKernel) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      frameRef.current = drawDocumentToCanvas(
+        canvas,
+        documentRef.current,
+        activeKernel,
+        selectedIdsRef.current,
+        backgroundRef.current,
+      );
+    } catch (error) {
+      frameRef.current = null;
+      onRenderFailure?.(asError(error));
+    }
+  }
 
   useEffect(() => {
     if (kernel) {
       kernelRef.current = kernel;
       onBackendChange?.(kernel.name);
+      draw(kernel);
       return;
     }
     let active = true;
@@ -213,19 +254,19 @@ export function CanvasScene({ document, kernel, className, style, selectedIds = 
       if (!active) return;
       kernelRef.current = loaded;
       onBackendChange?.(loaded.name);
-      if (canvasRef.current) frameRef.current = drawDocumentToCanvas(canvasRef.current, documentRef.current, loaded, selectedIdsRef.current);
+      draw(loaded);
     }).catch(() => {
       if (!active) return;
       kernelRef.current = referenceTransformKernel;
       onBackendChange?.("typescript");
-      if (canvasRef.current) frameRef.current = drawDocumentToCanvas(canvasRef.current, documentRef.current, referenceTransformKernel, selectedIdsRef.current);
+      draw(referenceTransformKernel);
     });
     return () => { active = false; };
-  }, [kernel, onBackendChange]);
+  }, [kernel, onBackendChange, onRenderFailure]);
 
   useEffect(() => {
-    if (canvasRef.current) frameRef.current = drawDocumentToCanvas(canvasRef.current, document, kernel ?? kernelRef.current, selectedIds);
-  }, [document, kernel, selectedIds]);
+    draw(kernel ?? kernelRef.current);
+  }, [background, document, kernel, selectedIds]);
 
   return <canvas
     ref={canvasRef}
@@ -237,11 +278,12 @@ export function CanvasScene({ document, kernel, className, style, selectedIds = 
     height={document.height}
     style={style}
     onPointerDown={(event) => {
-      if (!onNodePointerDown || !canvasRef.current || !frameRef.current) return;
+      if (!canvasRef.current || !frameRef.current) return;
       const point = canvasPoint(event, canvasRef.current);
       if (!point) return;
       const id = hitTestCanvasFrame(canvasRef.current, frameRef.current, point);
-      if (id) onNodePointerDown(id, event);
+      if (id) onNodePointerDown?.(id, event);
+      else onEmptyPointerDown?.(event);
     }}
   />;
 }
