@@ -20,13 +20,19 @@ Canvas interaction consumes the same prepared render frame instead of reconstruc
 
 `AnimationCanvasPreview.tsx` is the editor adapter. Animation clips use Canvas by default, retain node selection for property-key authoring, and layer only the lightweight rig visualization as transparent SVG. Rest-pose editing remains SVG. The top bar can switch animation preview back to the SVG reference renderer at any time.
 
+### Prepared vector paths
+
+Editor vector paths are immutable values under ordinary operations: changing geometry creates a new `VectorPath`, while transform-only animation and rig motion retain the existing path identity. `pathPreparation.ts` exploits that contract with a `WeakMap` cache keyed by `VectorPath` identity. Canvas therefore serializes a path to SVG syntax and creates its `Path2D` only when that immutable path object is first seen; subsequent animation frames perform an identity lookup instead of serializing the same anchors merely to compare a cache key.
+
+This stays in TypeScript because identity lookup is cheaper and simpler than crossing a WASM boundary. Rust remains appropriate for the measured numeric transform workload; path tessellation or other genuinely computational vector kernels can move behind a reusable boundary later if profiling shows they dominate.
+
 ### Multi-frame composition
 
-`renderComposition.ts` makes multi-frame presentation explicit without creating another document authority. It prepares ordered render layers that must share dimensions, validates each opacity, and designates exactly which prepared frame is used for hit testing.
+`renderComposition.ts` makes multi-frame presentation explicit without creating another document authority. It prepares ordered render layers that must share dimensions, validates each opacity, and requires exactly one hit-testable layer.
 
-Onion skinning now uses that composition path. Previous and next sampled documents are prepared as non-hit-testable underlays at the same `0.18` and `0.12` opacity used by the SVG reference path, followed by the current frame. Canvas is cleared once, all layers are drawn in deterministic order, and only the current frame participates in selection. The explicit SVG reference mode still renders the legacy DOM onion layers so the two paths remain directly comparable.
+Onion skinning uses that composition path. Previous and next sampled documents are prepared as non-hit-testable underlays at the same `0.18` and `0.12` opacity used by the SVG reference path, followed by the current frame. Canvas is cleared once, all layers are drawn in deterministic order, and only the current frame participates in selection. The explicit SVG reference mode still renders the legacy DOM onion layers so the two paths remain directly comparable.
 
-This slice intentionally preserves the existing onion layer order rather than changing the visual policy while changing the renderer. If onion presentation needs a different policy—such as character-only skins or overlay-vs-underlay behavior—that should be an explicit product/semantic change with its own evidence.
+This composition intentionally preserves the existing onion layer order rather than changing the visual policy while changing the renderer. If onion presentation needs a different policy—such as character-only skins or overlay-vs-underlay behavior—that should be an explicit product/semantic change with its own evidence.
 
 This still does not claim that the whole rasterizer lives in Rust. Path tessellation, deformation, batching, complex hit-testing kernels, and eventually a WebGPU/WebGL backend may move behind the same render-frame contract when representative measurements justify them.
 
@@ -36,19 +42,21 @@ The render frame preserves canonical scene order and hierarchical transform sema
 
 Hit testing uses the designated current frame and reverse paint order, so onion frames can never steal selection. Affine inversion and primitive containment are covered independently from React; path and text containment intentionally stay browser adapters because Canvas already owns their rasterization semantics. Composition tests separately cover layer order, opacity, dimensions, and hit-test ownership.
 
+Prepared path caching is semantic-preserving because an edited path receives a new identity and therefore a new preparation; equal-but-distinct path values do not alias in the cache. Focused tests cover both reuse and invalidation-by-identity.
+
 SVG remains the higher-level semantic reference. Canvas text rasterization and SVG text rasterization are browser backends rather than a pixel-identical contract. Likewise, the current Canvas backend multiplies inherited opacity per drawable; fully isolated SVG group-opacity compositing is a later compatibility item if translucent overlapping groups become a real authored workload.
 
 ## Performance evidence
 
-There are two deliberately separate measurements:
+There are two deliberately separate measurement surfaces:
 
-- `bun run bench:renderer` compares the TypeScript and Rust/WASM transform kernels on the same deterministic replicated-character workload. It checks numerical parity first and prints timing evidence without enforcing a speed threshold.
+- `bun run bench:renderer` compares the TypeScript and Rust/WASM transform kernels on the same deterministic replicated-character workload. The same artifact also compares the old serialize-every-lookup path-cache strategy with immutable identity lookup on the same production-shaped scene. Both comparisons verify semantic parity/checksums first and print timing evidence without enforcing a speed threshold.
 - `/renderer-lab` renders the same animated Nova scene through SVG DOM and Canvas, and can run a browser benchmark over 36 character copies and 60 pre-sampled frames. The SVG side forces a geometry flush so the comparison includes DOM/render work rather than only React scheduling.
 
-The CI benchmark workflow stores the kernel measurement as an artifact. Ordinary correctness CI does not fail because a shared runner happened to be slower or faster on one run.
+The CI benchmark workflow stores CPU evidence as an artifact. Ordinary correctness CI does not fail because a shared runner happened to be slower or faster on one run.
 
 ## Ownership
 
 Flat Stories owns character/vector render semantics and the adapter from its scene graph to render frames. Generic geometry kernels may move to `rust-packages` once they are reusable independently of Flat Stories. `viz-engine` remains a data/frame computation engine for visualization consumers and is not made authoritative for character graphics.
 
-The next renderer work should be chosen from measurements rather than coverage for its own sake. Likely candidates are path preparation/tessellation and batching on production-scale character scenes; WebGPU/WebGL should follow only when those measurements show Canvas 2D itself is the bottleneck.
+The next renderer work should continue to be chosen from measurements. Path tessellation/batching and Canvas draw-call cost are the likely remaining candidates on production-scale character scenes; WebGPU/WebGL should follow only when those measurements show Canvas 2D itself is the bottleneck.
