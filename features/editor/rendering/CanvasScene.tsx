@@ -94,7 +94,10 @@ export function CanvasScene({ document, kernel, className, style, onBackendChang
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const documentRef = useRef(document);
   const kernelRef = useRef<TransformKernel>(kernel ?? referenceTransformKernel);
-  documentRef.current = document;
+
+  useEffect(() => {
+    documentRef.current = document;
+  }, [document]);
 
   useEffect(() => {
     if (kernel) {
