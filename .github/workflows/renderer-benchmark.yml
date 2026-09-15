@@ -1,0 +1,45 @@
+name: Renderer Benchmark
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "renderer-wasm/**"
+      - "features/editor/rendering/**"
+      - "features/editor/rig.ts"
+      - "features/editor/model.ts"
+      - "scripts/benchmark-renderers.ts"
+      - "scripts/build-renderer-wasm.sh"
+  push:
+    branches:
+      - main
+    paths:
+      - "renderer-wasm/**"
+      - "features/editor/rendering/**"
+      - "features/editor/rig.ts"
+      - "features/editor/model.ts"
+      - "scripts/benchmark-renderers.ts"
+      - "scripts/build-renderer-wasm.sh"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.21
+      - name: Set up Rust renderer toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown
+      - name: Set up repository environment
+        run: bash scripts/codex-environment.sh setup
+      - name: Run renderer benchmark
+        run: bun run bench:renderer | tee renderer-benchmark.txt
+      - name: Publish benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: renderer-benchmark
+          path: renderer-benchmark.txt
