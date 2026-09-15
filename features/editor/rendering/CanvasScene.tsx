@@ -4,8 +4,19 @@ import { useCallback, useEffect, useRef, type CSSProperties, type PointerEvent a
 import type { DrawableObject, EditorDocument, PathObject, Point, TextObject } from "../model";
 import { pathToSvg } from "../vectorPath";
 import { hitTestRenderFrame, type ComplexShapeHitTester } from "./hitTest";
-import { buildRenderFrame, type RenderFrame, type RenderItem } from "./renderFrame";
+import {
+  buildRenderComposition,
+  type RenderComposition,
+  type RenderCompositionLayerKind,
+} from "./renderComposition";
+import type { RenderFrame, RenderItem } from "./renderFrame";
 import { loadBrowserWasmTransformKernel, referenceTransformKernel, type TransformKernel } from "./transformKernel";
+
+export type CanvasSceneUnderlay = {
+  kind: Exclude<RenderCompositionLayerKind, "current">;
+  document: EditorDocument;
+  opacity: number;
+};
 
 type CanvasSceneProps = {
   document: EditorDocument;
@@ -13,6 +24,7 @@ type CanvasSceneProps = {
   className?: string;
   style?: CSSProperties;
   selectedIds?: readonly string[];
+  underlays?: readonly CanvasSceneUnderlay[];
   background?: string | null;
   onBackendChange?: (backend: TransformKernel["name"]) => void;
   onNodePointerDown?: (id: string, event: ReactPointerEvent<HTMLCanvasElement>) => void;
@@ -107,17 +119,62 @@ function drawSelection(context: CanvasRenderingContext2D, object: DrawableObject
   context.setLineDash([]);
 }
 
-function drawItem(context: CanvasRenderingContext2D, item: RenderItem, selected: boolean, selectionStroke: string) {
+function drawItem(
+  context: CanvasRenderingContext2D,
+  item: RenderItem,
+  layerOpacity: number,
+  selected: boolean,
+  selectionStroke: string,
+) {
   const [a, b, c, d, e, f] = item.matrix;
   context.save();
   context.setTransform(a, b, c, d, e, f);
-  context.globalAlpha = item.opacity;
+  context.globalAlpha = item.opacity * layerOpacity;
   drawDrawable(context, item.object);
   if (selected) {
     context.globalAlpha = 1;
     drawSelection(context, item.object, selectionStroke);
   }
   context.restore();
+}
+
+function prepareCanvas(canvas: HTMLCanvasElement, width: number, height: number, background: string | null) {
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas 2D is unavailable.");
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.globalAlpha = 1;
+  context.clearRect(0, 0, width, height);
+  if (background !== null) {
+    context.fillStyle = background;
+    context.fillRect(0, 0, width, height);
+  }
+  return context;
+}
+
+export function drawCompositionToCanvas(
+  canvas: HTMLCanvasElement,
+  composition: RenderComposition,
+  selectedIds: readonly string[] = [],
+  background: string | null = "#ffffff",
+) {
+  const context = prepareCanvas(canvas, composition.width, composition.height, background);
+  const selection = new Set(selectedIds);
+  const selectionStroke = selection.size > 0
+    ? getComputedStyle(canvas).getPropertyValue("--accent").trim() || "#7c9cff"
+    : "#7c9cff";
+
+  for (const layer of composition.layers) {
+    const allowSelection = layer.kind === "current";
+    for (const item of layer.frame.items) {
+      drawItem(context, item, layer.opacity, allowSelection && selection.has(item.id), selectionStroke);
+    }
+  }
+
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.globalAlpha = 1;
+  return composition.hitTestFrame;
 }
 
 export function drawDocumentToCanvas(
@@ -127,28 +184,10 @@ export function drawDocumentToCanvas(
   selectedIds: readonly string[] = [],
   background: string | null = "#ffffff",
 ) {
-  if (canvas.width !== document.width) canvas.width = document.width;
-  if (canvas.height !== document.height) canvas.height = document.height;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Canvas 2D is unavailable.");
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  context.globalAlpha = 1;
-  context.clearRect(0, 0, document.width, document.height);
-  if (background !== null) {
-    context.fillStyle = background;
-    context.fillRect(0, 0, document.width, document.height);
-  }
-
-  const frame = buildRenderFrame(document, kernel);
-  const selection = new Set(selectedIds);
-  const selectionStroke = selection.size > 0
-    ? getComputedStyle(canvas).getPropertyValue("--accent").trim() || "#7c9cff"
-    : "#7c9cff";
-  for (const item of frame.items) drawItem(context, item, selection.has(item.id), selectionStroke);
-
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  context.globalAlpha = 1;
-  return frame;
+  const composition = buildRenderComposition([
+    { kind: "current", document, opacity: 1, hitTestable: true },
+  ], kernel);
+  return drawCompositionToCanvas(canvas, composition, selectedIds, background);
 }
 
 function canvasPoint(event: ReactPointerEvent<HTMLCanvasElement>, canvas: HTMLCanvasElement): Point | null {
@@ -206,6 +245,7 @@ export function CanvasScene({
   className,
   style,
   selectedIds = [],
+  underlays = [],
   background = "#ffffff",
   onBackendChange,
   onNodePointerDown,
@@ -215,6 +255,7 @@ export function CanvasScene({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const documentRef = useRef(document);
   const selectedIdsRef = useRef(selectedIds);
+  const underlaysRef = useRef(underlays);
   const backgroundRef = useRef(background);
   const frameRef = useRef<RenderFrame | null>(null);
   const kernelRef = useRef<TransformKernel>(kernel ?? referenceTransformKernel);
@@ -222,17 +263,26 @@ export function CanvasScene({
   useEffect(() => {
     documentRef.current = document;
     selectedIdsRef.current = selectedIds;
+    underlaysRef.current = underlays;
     backgroundRef.current = background;
-  }, [background, document, selectedIds]);
+  }, [background, document, selectedIds, underlays]);
 
   const draw = useCallback((activeKernel: TransformKernel) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     try {
-      frameRef.current = drawDocumentToCanvas(
+      const composition = buildRenderComposition([
+        ...underlaysRef.current.map((layer) => ({
+          kind: layer.kind,
+          document: layer.document,
+          opacity: layer.opacity,
+          hitTestable: false,
+        })),
+        { kind: "current" as const, document: documentRef.current, opacity: 1, hitTestable: true },
+      ], activeKernel);
+      frameRef.current = drawCompositionToCanvas(
         canvas,
-        documentRef.current,
-        activeKernel,
+        composition,
         selectedIdsRef.current,
         backgroundRef.current,
       );
@@ -266,13 +316,14 @@ export function CanvasScene({
 
   useEffect(() => {
     draw(kernel ?? kernelRef.current);
-  }, [background, document, draw, kernel, selectedIds]);
+  }, [background, document, draw, kernel, selectedIds, underlays]);
 
   return <canvas
     ref={canvasRef}
     className={className}
     aria-label={`${document.name} Canvas renderer`}
     data-renderer="canvas2d"
+    data-composition-layer-count={underlays.length + 1}
     data-selected-node-count={selectedIds.length}
     width={document.width}
     height={document.height}

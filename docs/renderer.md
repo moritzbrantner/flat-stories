@@ -12,7 +12,7 @@ The important boundary is that SVG DOM is no longer the only runtime presentatio
 
 ### Canvas 2D + Rust/WASM
 
-`features/editor/rendering/CanvasScene.tsx` consumes a renderer-neutral frame prepared by `renderFrame.ts`. The Rust crate, `renderer-wasm`, computes hierarchical world transforms, rig attachment transforms, and inherited opacity over a compact `Float32Array` ABI. TypeScript owns browser integration and Canvas drawing.
+`features/editor/rendering/CanvasScene.tsx` consumes renderer-neutral frames prepared by `renderFrame.ts`. The Rust crate, `renderer-wasm`, computes hierarchical world transforms, rig attachment transforms, and inherited opacity over a compact `Float32Array` ABI. TypeScript owns browser integration and Canvas drawing.
 
 A TypeScript transform kernel implements the same ABI and serves as deterministic fallback when WASM cannot load and as the readable reference against which Rust output is checked. If Canvas 2D itself cannot render, the editor falls back to SVG rather than leaving animation preview unusable.
 
@@ -20,7 +20,13 @@ Canvas interaction consumes the same prepared render frame instead of reconstruc
 
 `AnimationCanvasPreview.tsx` is the editor adapter. Animation clips use Canvas by default, retain node selection for property-key authoring, and layer only the lightweight rig visualization as transparent SVG. Rest-pose editing remains SVG. The top bar can switch animation preview back to the SVG reference renderer at any time.
 
-Onion skinning deliberately uses the SVG reference path for now. That preserves the existing compositing semantics while the optimized renderer grows a first-class multi-frame/layer composition contract; it avoids quietly changing onion-skin behavior merely to increase Canvas coverage.
+### Multi-frame composition
+
+`renderComposition.ts` makes multi-frame presentation explicit without creating another document authority. It prepares ordered render layers that must share dimensions, validates each opacity, and designates exactly which prepared frame is used for hit testing.
+
+Onion skinning now uses that composition path. Previous and next sampled documents are prepared as non-hit-testable underlays at the same `0.18` and `0.12` opacity used by the SVG reference path, followed by the current frame. Canvas is cleared once, all layers are drawn in deterministic order, and only the current frame participates in selection. The explicit SVG reference mode still renders the legacy DOM onion layers so the two paths remain directly comparable.
+
+This slice intentionally preserves the existing onion layer order rather than changing the visual policy while changing the renderer. If onion presentation needs a different policy—such as character-only skins or overlay-vs-underlay behavior—that should be an explicit product/semantic change with its own evidence.
 
 This still does not claim that the whole rasterizer lives in Rust. Path tessellation, deformation, batching, complex hit-testing kernels, and eventually a WebGPU/WebGL backend may move behind the same render-frame contract when representative measurements justify them.
 
@@ -28,7 +34,7 @@ This still does not claim that the whole rasterizer lives in Rust. Path tessella
 
 The render frame preserves canonical scene order and hierarchical transform semantics. Rust/WASM results are compared numerically with the TypeScript reference before performance numbers are considered.
 
-Hit testing uses that exact frame and reverse paint order, so a pointer resolves to the topmost drawable under the same transform hierarchy used for rendering. Affine inversion and primitive containment are covered independently from React; path and text containment intentionally stay browser adapters because Canvas already owns their rasterization semantics.
+Hit testing uses the designated current frame and reverse paint order, so onion frames can never steal selection. Affine inversion and primitive containment are covered independently from React; path and text containment intentionally stay browser adapters because Canvas already owns their rasterization semantics. Composition tests separately cover layer order, opacity, dimensions, and hit-test ownership.
 
 SVG remains the higher-level semantic reference. Canvas text rasterization and SVG text rasterization are browser backends rather than a pixel-identical contract. Likewise, the current Canvas backend multiplies inherited opacity per drawable; fully isolated SVG group-opacity compositing is a later compatibility item if translucent overlapping groups become a real authored workload.
 
@@ -45,4 +51,4 @@ The CI benchmark workflow stores the kernel measurement as an artifact. Ordinary
 
 Flat Stories owns character/vector render semantics and the adapter from its scene graph to render frames. Generic geometry kernels may move to `rust-packages` once they are reusable independently of Flat Stories. `viz-engine` remains a data/frame computation engine for visualization consumers and is not made authoritative for character graphics.
 
-The next optimized-renderer slice is multi-frame composition for onion skins. It should reuse the same frame contract and make opacity/layer order explicit before the editor stops falling back to SVG for that mode.
+The next renderer work should be chosen from measurements rather than coverage for its own sake. Likely candidates are path preparation/tessellation and batching on production-scale character scenes; WebGPU/WebGL should follow only when those measurements show Canvas 2D itself is the bottleneck.

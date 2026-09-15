@@ -6,12 +6,13 @@ import { Editor } from "./Editor";
 import { fixtureDocument } from "./fixture";
 
 describe("onion skinning", () => {
-  it("renders neighboring sampled frames as non-interactive SVG context", async () => {
+  it("keeps neighboring sampled frames available through the non-interactive SVG reference path", async () => {
     const user = userEvent.setup();
     const { container } = render(<Editor initialDocument={fixtureDocument} />);
 
     expect(screen.getByLabelText("Onion skin")).toBeDisabled();
     await user.selectOptions(screen.getByRole("combobox", { name: "Animation clip" }), "hello");
+    await user.click(screen.getByRole("button", { name: "Preview renderer" }));
     await user.click(screen.getByLabelText("Onion skin"));
 
     const previous = container.querySelector('[data-onion-skin="previous"]');

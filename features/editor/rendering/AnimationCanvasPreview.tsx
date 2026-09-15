@@ -2,7 +2,7 @@
 
 import type { EditorDocument, Point } from "../model";
 import { getBoneWorldPose } from "../rig";
-import { CanvasScene } from "./CanvasScene";
+import { CanvasScene, type CanvasSceneUnderlay } from "./CanvasScene";
 import type { TransformKernel } from "./transformKernel";
 
 type PreviewViewport = Point & { zoom: number };
@@ -12,6 +12,7 @@ type AnimationCanvasPreviewProps = {
   selectedIds: readonly string[];
   viewport: PreviewViewport;
   showRig: boolean;
+  onionSkins?: readonly CanvasSceneUnderlay[];
   onSelectionChange: (id: string | null, additive: boolean) => void;
   onBackendChange?: (backend: TransformKernel["name"]) => void;
   onRenderFailure?: (error: Error) => void;
@@ -22,6 +23,7 @@ export function AnimationCanvasPreview({
   selectedIds,
   viewport,
   showRig,
+  onionSkins = [],
   onSelectionChange,
   onBackendChange,
   onRenderFailure,
@@ -33,6 +35,7 @@ export function AnimationCanvasPreview({
       className="artboard preview-canvas"
       document={document}
       selectedIds={selectedIds}
+      underlays={onionSkins}
       style={{ transform }}
       onBackendChange={onBackendChange}
       onRenderFailure={onRenderFailure}
