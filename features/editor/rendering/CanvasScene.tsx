@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import type { DrawableObject, EditorDocument, PathObject, Point, TextObject } from "../model";
 import { pathToSvg } from "../vectorPath";
 import { hitTestRenderFrame, type ComplexShapeHitTester } from "./hitTest";
@@ -225,7 +225,7 @@ export function CanvasScene({
     backgroundRef.current = background;
   }, [background, document, selectedIds]);
 
-  function draw(activeKernel: TransformKernel) {
+  const draw = useCallback((activeKernel: TransformKernel) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     try {
@@ -240,7 +240,7 @@ export function CanvasScene({
       frameRef.current = null;
       onRenderFailure?.(asError(error));
     }
-  }
+  }, [onRenderFailure]);
 
   useEffect(() => {
     if (kernel) {
@@ -262,11 +262,11 @@ export function CanvasScene({
       draw(referenceTransformKernel);
     });
     return () => { active = false; };
-  }, [kernel, onBackendChange, onRenderFailure]);
+  }, [draw, kernel, onBackendChange]);
 
   useEffect(() => {
     draw(kernel ?? kernelRef.current);
-  }, [background, document, kernel, selectedIds]);
+  }, [background, document, draw, kernel, selectedIds]);
 
   return <canvas
     ref={canvasRef}
