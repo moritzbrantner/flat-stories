@@ -118,19 +118,22 @@ export function Editor({ initialDocument }: EditorProps) {
     if (times.next !== null) frames.push({ kind: "next", time: times.next, document: sampleAnimation(document, clipId, times.next) });
     return frames;
   }, [clipId, currentTime, document, onionSkinEnabled, onionSkinOffset, selectedClip]);
+  const canvasOnionSkins = useMemo(() => onionSkinFrames.map((frame) => ({
+    kind: frame.kind === "previous" ? "onion-previous" as const : "onion-next" as const,
+    document: frame.document,
+    opacity: frame.kind === "previous" ? 0.18 : 0.12,
+  })), [onionSkinFrames]);
   const rootIds = useMemo(() => new Set(document.objects.map((object) => object.id)), [document.objects]);
   const canGroup = selectedIds.length > 1 && selectedIds.every((id) => rootIds.has(id));
   const canUngroup = selectedIds.length === 1 && rootIds.has(selectedIds[0]) && selected?.kind === "group";
   const editingEnabled = clipId === null;
-  const useCanvasPreview = !editingEnabled && previewRenderer === "canvas" && !canvasPreviewFailed && !onionSkinEnabled;
+  const useCanvasPreview = !editingEnabled && previewRenderer === "canvas" && !canvasPreviewFailed;
   const canArrange = editingEnabled && canArrangeSelection(document, selectedIds);
   const previewStatus = useCanvasPreview
-    ? `Canvas · ${previewBackend === "rust-wasm" ? "Rust/WASM" : "TypeScript"}`
-    : previewRenderer === "canvas" && onionSkinEnabled
-      ? "SVG reference · onion skin"
-      : previewRenderer === "canvas" && canvasPreviewFailed
-        ? "SVG reference · Canvas unavailable"
-        : "SVG reference";
+    ? `Canvas · ${previewBackend === "rust-wasm" ? "Rust/WASM" : "TypeScript"}${onionSkinFrames.length > 0 ? ` · onion ${onionSkinFrames.length}` : ""}`
+    : previewRenderer === "canvas" && canvasPreviewFailed
+      ? "SVG reference · Canvas unavailable"
+      : "SVG reference";
 
   const handlePreviewSelection = useCallback((id: string | null, additive: boolean) => {
     if (!id) {
@@ -469,6 +472,7 @@ export function Editor({ initialDocument }: EditorProps) {
         selectedIds={selectedIds}
         viewport={viewport}
         showRig={showRig}
+        onionSkins={canvasOnionSkins}
         onSelectionChange={handlePreviewSelection}
         onBackendChange={handlePreviewBackendChange}
         onRenderFailure={handlePreviewFailure}
