@@ -6,13 +6,16 @@ import { useEffect, useMemo, useState } from "react";
 import { sampleAnimation } from "@/features/editor/animation";
 import { fixtureDocument } from "@/features/editor/fixture";
 import { createRendererBenchmarkDocument } from "@/features/editor/rendering/benchmarkFixture";
-import { CanvasScene, drawDocumentToCanvas } from "@/features/editor/rendering/CanvasScene";
+import { CanvasScene, drawCompositionToCanvas, drawDocumentToCanvas } from "@/features/editor/rendering/CanvasScene";
+import { buildRenderComposition } from "@/features/editor/rendering/renderComposition";
 import { SvgScene } from "@/features/editor/rendering/SvgScene";
 import { loadBrowserWasmTransformKernel, referenceTransformKernel, type TransformKernel } from "@/features/editor/rendering/transformKernel";
 
 type BrowserBenchmark = {
   svgDomMs: number;
-  canvasMs: number;
+  canvasTotalMs: number;
+  framePreparationMs: number;
+  canvasDrawMs: number;
   speedup: number;
   frames: number;
   copies: number;
@@ -74,14 +77,27 @@ export function RendererLab() {
       }
       const svgDomMs = performance.now() - svgStart;
 
-      const canvasStart = performance.now();
+      const preparationStart = performance.now();
+      const prepared = sampled.map((documentFrame) => buildRenderComposition([
+        { kind: "current", document: documentFrame, opacity: 1, hitTestable: true },
+      ], kernel));
+      const framePreparationMs = performance.now() - preparationStart;
+
+      drawCompositionToCanvas(canvas, prepared[0]);
+      const drawStart = performance.now();
+      for (const composition of prepared) drawCompositionToCanvas(canvas, composition);
+      const canvasDrawMs = performance.now() - drawStart;
+
+      const canvasTotalStart = performance.now();
       for (const documentFrame of sampled) drawDocumentToCanvas(canvas, documentFrame, kernel);
-      const canvasMs = performance.now() - canvasStart;
+      const canvasTotalMs = performance.now() - canvasTotalStart;
 
       setBenchmark({
         svgDomMs,
-        canvasMs,
-        speedup: svgDomMs / canvasMs,
+        canvasTotalMs,
+        framePreparationMs,
+        canvasDrawMs,
+        speedup: svgDomMs / canvasTotalMs,
         frames,
         copies,
         backend: kernel.name,
@@ -93,12 +109,15 @@ export function RendererLab() {
   }
 
   const sceneStyle = { width: "100%", height: "auto", display: "block", background: "white" } as const;
+  const dominantCanvasStage = benchmark
+    ? benchmark.canvasDrawMs >= benchmark.framePreparationMs ? "Canvas API drawing" : "frame preparation"
+    : null;
 
   return <main style={{ maxWidth: 1280, margin: "0 auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
     <header style={{ display: "flex", gap: 16, alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap" }}>
       <div>
         <h1 style={{ marginBottom: 6 }}>Renderer lab</h1>
-        <p style={{ marginTop: 0 }}>SVG DOM is the semantic reference. Canvas 2D consumes the same scene through the {kernel.name === "rust-wasm" ? "Rust/WASM" : "TypeScript fallback"} transform kernel and now uses that same render frame for hit testing.</p>
+        <p style={{ marginTop: 0 }}>SVG DOM is the semantic reference. Canvas 2D consumes the same scene through the {kernel.name === "rust-wasm" ? "Rust/WASM" : "TypeScript fallback"} transform kernel and uses that same render frame for hit testing.</p>
       </div>
       <a href="../">Back to editor</a>
     </header>
@@ -132,11 +151,19 @@ export function RendererLab() {
 
     <section style={{ marginTop: 28 }}>
       <h2>Representative browser benchmark</h2>
-      <p>Updates 36 copies of the character across 60 pre-sampled animation frames. SVG uses React DOM updates plus an SVG geometry flush; Canvas uses the selected transform kernel and Canvas 2D draw path. Results are evidence, not pass/fail thresholds.</p>
+      <p>Updates 36 copies of the character across 60 pre-sampled animation frames. Separate runs measure renderer-frame preparation, Canvas API drawing from already-prepared frames, the complete Canvas pass, and React/SVG DOM updates with a geometry flush. Results are evidence, not pass/fail thresholds.</p>
       <button type="button" onClick={runBenchmark}>Run benchmark</button>
-      {benchmark ? <p>
-        SVG DOM: {benchmark.svgDomMs.toFixed(1)} ms · Canvas/{benchmark.backend}: {benchmark.canvasMs.toFixed(1)} ms · ratio: {benchmark.speedup.toFixed(2)}× over this run.
-      </p> : null}
+      {benchmark ? <table style={{ marginTop: 14, borderCollapse: "collapse" }}>
+        <tbody>
+          <tr><th style={{ textAlign: "left", paddingRight: 18 }}>SVG DOM total</th><td><output aria-label="SVG DOM benchmark">{benchmark.svgDomMs.toFixed(1)} ms</output></td></tr>
+          <tr><th style={{ textAlign: "left", paddingRight: 18 }}>Canvas total</th><td><output aria-label="Canvas total benchmark">{benchmark.canvasTotalMs.toFixed(1)} ms</output></td></tr>
+          <tr><th style={{ textAlign: "left", paddingRight: 18 }}>Frame preparation ({benchmark.backend})</th><td><output aria-label="Frame preparation benchmark">{benchmark.framePreparationMs.toFixed(1)} ms</output></td></tr>
+          <tr><th style={{ textAlign: "left", paddingRight: 18 }}>Canvas API drawing</th><td><output aria-label="Canvas draw benchmark">{benchmark.canvasDrawMs.toFixed(1)} ms</output></td></tr>
+          <tr><th style={{ textAlign: "left", paddingRight: 18 }}>SVG / Canvas ratio</th><td><output aria-label="Renderer speedup benchmark">{benchmark.speedup.toFixed(2)}×</output></td></tr>
+          <tr><th style={{ textAlign: "left", paddingRight: 18 }}>Larger Canvas stage</th><td><output aria-label="Canvas bottleneck benchmark">{dominantCanvasStage}</output></td></tr>
+        </tbody>
+      </table> : null}
+      {benchmark ? <p><small>Stage timings are independent loops over the same sampled frames, so preparation + drawing is diagnostic rather than an arithmetic decomposition of the total run.</small></p> : null}
     </section>
   </main>;
 }
