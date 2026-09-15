@@ -24,6 +24,7 @@ export function RendererLab() {
   const [playing, setPlaying] = useState(true);
   const [kernel, setKernel] = useState<TransformKernel>(referenceTransformKernel);
   const [benchmark, setBenchmark] = useState<BrowserBenchmark | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const clip = fixtureDocument.animations[0];
   const displayDocument = useMemo(() => sampleAnimation(fixtureDocument, clip.id, time), [clip.id, time]);
 
@@ -97,7 +98,7 @@ export function RendererLab() {
     <header style={{ display: "flex", gap: 16, alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap" }}>
       <div>
         <h1 style={{ marginBottom: 6 }}>Renderer lab</h1>
-        <p style={{ marginTop: 0 }}>SVG DOM is the semantic reference. Canvas 2D consumes the same scene through the {kernel.name === "rust-wasm" ? "Rust/WASM" : "TypeScript fallback"} transform kernel.</p>
+        <p style={{ marginTop: 0 }}>SVG DOM is the semantic reference. Canvas 2D consumes the same scene through the {kernel.name === "rust-wasm" ? "Rust/WASM" : "TypeScript fallback"} transform kernel and now uses that same render frame for hit testing.</p>
       </div>
       <a href="../">Back to editor</a>
     </header>
@@ -107,6 +108,8 @@ export function RendererLab() {
       <input aria-label="Renderer lab time" type="range" min={0} max={clip.duration} step={0.01} value={time}
         onChange={(event) => { setPlaying(false); setTime(Number(event.target.value)); }} />
       <output>{time.toFixed(2)}s / {clip.duration.toFixed(2)}s</output>
+      <output aria-label="Canvas selection">Selected: {selectedId ?? "none"}</output>
+      {selectedId ? <button type="button" onClick={() => setSelectedId(null)}>Clear selection</button> : null}
     </div>
 
     <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
@@ -116,7 +119,14 @@ export function RendererLab() {
       </article>
       <article>
         <h2>Canvas / {kernel.name === "rust-wasm" ? "Rust WASM" : "JS fallback"}</h2>
-        <CanvasScene document={displayDocument} kernel={kernel} style={sceneStyle} />
+        <p>Click a visible shape to dogfood topmost-node hit testing and selection highlighting.</p>
+        <CanvasScene
+          document={displayDocument}
+          kernel={kernel}
+          selectedIds={selectedId ? [selectedId] : []}
+          onNodePointerDown={(id) => setSelectedId(id)}
+          style={{ ...sceneStyle, cursor: "pointer" }}
+        />
       </article>
     </section>
 
