@@ -26,6 +26,7 @@ export function RendererLab() {
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [kernel, setKernel] = useState<TransformKernel>(referenceTransformKernel);
+  const [kernelReady, setKernelReady] = useState(false);
   const [benchmark, setBenchmark] = useState<BrowserBenchmark | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const clip = fixtureDocument.animations[0];
@@ -33,9 +34,21 @@ export function RendererLab() {
 
   useEffect(() => {
     let active = true;
-    loadBrowserWasmTransformKernel().then((loaded) => { if (active) setKernel(loaded); }).catch(() => undefined);
+    loadBrowserWasmTransformKernel()
+      .then((loaded) => { if (active) setKernel(loaded); })
+      .catch(() => undefined)
+      .finally(() => { if (active) setKernelReady(true); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!kernelReady || new URLSearchParams(window.location.search).get("benchmark") !== "1") return;
+    setPlaying(false);
+    const timer = window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>("[data-run-renderer-benchmark]")?.click();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [kernelReady]);
 
   useEffect(() => {
     if (!playing) return;
@@ -149,10 +162,10 @@ export function RendererLab() {
       </article>
     </section>
 
-    <section style={{ marginTop: 28 }}>
+    <section style={{ marginTop: 28 }} data-browser-benchmark-status={benchmark ? "complete" : kernelReady ? "ready" : "loading"}>
       <h2>Representative browser benchmark</h2>
       <p>Updates 36 copies of the character across 60 pre-sampled animation frames. Separate runs measure renderer-frame preparation, Canvas API drawing from already-prepared frames, the complete Canvas pass, and React/SVG DOM updates with a geometry flush. Results are evidence, not pass/fail thresholds.</p>
-      <button type="button" onClick={runBenchmark}>Run benchmark</button>
+      <button type="button" data-run-renderer-benchmark onClick={runBenchmark} disabled={!kernelReady}>Run benchmark</button>
       {benchmark ? <table style={{ marginTop: 14, borderCollapse: "collapse" }}>
         <tbody>
           <tr><th style={{ textAlign: "left", paddingRight: 18 }}>SVG DOM total</th><td><output aria-label="SVG DOM benchmark">{benchmark.svgDomMs.toFixed(1)} ms</output></td></tr>
@@ -164,6 +177,7 @@ export function RendererLab() {
         </tbody>
       </table> : null}
       {benchmark ? <p><small>Stage timings are independent loops over the same sampled frames, so preparation + drawing is diagnostic rather than an arithmetic decomposition of the total run.</small></p> : null}
+      {benchmark ? <pre id="renderer-benchmark-json" hidden>{JSON.stringify(benchmark)}</pre> : null}
     </section>
   </main>;
 }
