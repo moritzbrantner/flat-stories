@@ -6,4 +6,5 @@ public/renderer/*.wasm
 out/
 node_modules/
 coverage/
+browser-renderer-benchmark.*
 *.tsbuildinfo
