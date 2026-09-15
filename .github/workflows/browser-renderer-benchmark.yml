@@ -1,0 +1,56 @@
+name: Browser Renderer Benchmark
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "app/renderer-lab/**"
+      - "features/editor/rendering/**"
+      - "features/editor/animation.ts"
+      - "features/editor/fixture.ts"
+      - "renderer-wasm/**"
+      - "scripts/run-browser-renderer-benchmark.ts"
+      - "scripts/serve-static-export.ts"
+      - "package.json"
+      - "next.config.ts"
+  push:
+    branches:
+      - main
+    paths:
+      - "app/renderer-lab/**"
+      - "features/editor/rendering/**"
+      - "features/editor/animation.ts"
+      - "features/editor/fixture.ts"
+      - "renderer-wasm/**"
+      - "scripts/run-browser-renderer-benchmark.ts"
+      - "scripts/serve-static-export.ts"
+      - "package.json"
+      - "next.config.ts"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.21
+      - name: Set up Rust renderer toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown
+      - name: Set up repository environment
+        run: bash scripts/codex-environment.sh setup
+      - name: Build static renderer lab
+        run: bun run build
+      - name: Capture browser renderer evidence
+        run: bun run bench:renderer:browser | tee browser-renderer-benchmark.txt
+      - name: Publish browser benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-renderer-benchmark
+          path: |
+            browser-renderer-benchmark.json
+            browser-renderer-benchmark.txt
+            browser-renderer-benchmark.html
