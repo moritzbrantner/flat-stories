@@ -447,13 +447,41 @@ function childElements(element: Element) {
   return result;
 }
 
-function groupObject(element: Element, inherited: Paint, context: Context): GroupObject {
+function groupObject(element: Element, inherited: Paint, context: Context): EditorObject {
   assertAttributes(element, [...BASE_ATTRIBUTES, ...PAINT_ATTRIBUTES]);
+  const children = childElements(element);
+  const wrapperChild = children.length === 1 && ["rect", "circle", "path", "text"].includes(children[0].localName)
+    ? children[0]
+    : null;
+  const hasGroupPaint = PAINT_ATTRIBUTES.some((name) => element.hasAttribute(name));
+  const childHasNodeState = wrapperChild
+    ? ["id", "transform", "opacity", "display", "visibility"].some((name) => wrapperChild.hasAttribute(name))
+    : false;
+
+  if (wrapperChild && !hasGroupPaint && !childHasNodeState) {
+    const base = nodeBase(element, wrapperChild.localName, context);
+    const drawable = importElement(wrapperChild, inherited, context);
+    context.ids.delete(drawable.id);
+    if (drawable.kind === "group") {
+      fail("invalid-svg", locationOf(element), "internal SVG wrapper classification failed");
+    }
+    return {
+      ...drawable,
+      ...base,
+      id: base.id,
+      name: base.name,
+      transform: base.transform,
+      opacity: base.opacity,
+      visible: base.visible,
+      locked: base.locked,
+    };
+  }
+
   const paint = paintFor(element, inherited);
   return {
     ...nodeBase(element, "group", context),
     kind: "group",
-    children: childElements(element).map((child) => importElement(child, paint, context)),
+    children: children.map((child) => importElement(child, paint, context)),
   };
 }
 
