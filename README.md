@@ -73,8 +73,8 @@ Keep implementation in small independently verifiable slices. The current horizo
 9. **Complete — project persistence foundation:** versioned deterministic `.flatstories.json` serialization/parsing with strict v1 model validation plus reusable browser Save/Load controls.
 10. **Complete — editor load integration:** validated project loads replace live authored Editor state while clearing selection, animation-preview, onion-skin, and in-progress pointer transients without rewriting imported authored data.
 11. **Complete — renderer foundation slice:** SVG DOM reference renderer, renderer-neutral scene frame, TypeScript fallback transform kernel, Rust/WASM transform kernel, Canvas 2D backend, browser comparison lab, and recorded benchmark evidence.
-12. **Now — static SVG import:** parse the supported SVG subset back into the canonical scene graph with explicit unsupported-feature handling.
-13. **After — animated SVG export:** encode the supported numeric animation subset into self-contained SVG animation.
+12. **Complete — static SVG import:** parse groups, rectangles, circles, single-subpath M/L/C/Z paths, bold text, supported paint/visibility, and decomposable transforms into the canonical scene graph; unsupported SVG features fail with explicit diagnostics instead of being silently discarded.
+13. **Now — animated SVG export:** encode the supported numeric animation subset into self-contained SVG animation.
 14. **After measured need — renderer acceleration:** move the strongest measured path/tessellation/deformation/batching bottleneck into Rust and evaluate a GPU backend without changing authored scene semantics.
 
 Do not pull later-horizon concerns into an earlier slice unless a concrete blocker proves the boundary wrong.
@@ -93,10 +93,16 @@ A successful load replaces only authored document state. Selection, sampled anim
 4. **Poses and expressions** — named reusable character poses and facial-expression states. The deterministic model and first authoring controls are present.
 5. **Animation timeline** — editable tracks/keyframes, easing curves, playback, onion skinning, copy/paste and loop regions. The typed clip model, scrub preview, deterministic pose-keying operations, pose-keyframing controls, direct existing-keyframe inspector, individual property keying, deterministic playback, transient preview loop ranges, and neighboring-frame onion skins are present.
 6. **Character animation workflows** — reusable blink/idle/wave/walk/talk clips, pose keyframes, mirroring and character instances.
-7. **SVG persistence/interchange** — deterministic project JSON, supported SVG import/export, then self-contained animated SVG export for supported tracks. Static SVG export and project save/load are complete; supported SVG import is next.
+7. **SVG persistence/interchange** — deterministic project JSON, supported SVG import/export, then self-contained animated SVG export for supported tracks. Static SVG export, project save/load, and the fail-closed supported SVG importer are complete; animated SVG export is next.
 8. **Runtime rendering** — keep SVG DOM as reference/editing fallback; evolve the Canvas/Rust-WASM backend from transform preparation toward measured path/deformation/GPU workloads while preserving one scene authority.
 9. **Dogfood a complete original mascot** — build and animate a production-scale character entirely in Flat Stories and turn friction into focused follow-ups.
 10. **Advanced deformation only when justified** — path morphing, two-dimensional deformation, mesh skinning, motion paths, richer IK and secondary motion.
+
+## SVG import boundary
+
+Static SVG import is an adapter into the canonical Flat Stories document, not a retained XML/CSS model. The supported editable subset covers nested groups, rectangles, circles, single-subpath absolute `M`/`L`/`C`/`Z` paths, bold text, direct fill/stroke styling, opacity/visibility, and transforms that can be represented as translate/rotate/scale. Flat Stories' own static SVG drawable wrappers are recognized so round-tripping does not add an artificial group around every shape.
+
+Features that cannot be represented without changing semantics—such as gradients or other paint servers, clipping/masking, CSS-driven styling, unsupported path commands, skew, viewport scaling, and arbitrary text layout—fail with a location-specific diagnostic. Import never silently drops such features or creates a second SVG document authority.
 
 ## Editing versus preview
 
@@ -104,4 +110,4 @@ The rest pose is the authored editing state. Selecting an animation clip switche
 
 ## Current verification focus
 
-Pure scene-graph, vector-path, geometry, snapping, animation, animation-authoring, playback/range, onion-skin timing, SVG export, project serialization/validation, pose/expression, rig math, shared-layer projection, and renderer-frame behavior are deterministic and covered independently from React. Rust renderer tests cover transform composition and fail-closed parent ordering. Browser-focused tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, shared undo/redo, pose/expression authoring, pose keyframing, direct keyframe editing, individual property keying, playback controls, preview loop ranges, pointer-disabled onion skins, SVG/project persistence controls, live project-load transient resets, animation-preview isolation, rig controls, and timeline entry points.
+Pure scene-graph, vector-path, geometry, snapping, animation, animation-authoring, playback/range, onion-skin timing, SVG export/import, project serialization/validation, pose/expression, rig math, shared-layer projection, and renderer-frame behavior are deterministic and covered independently from React. Rust renderer tests cover transform composition and fail-closed parent ordering. Browser-focused tests cover hierarchical layers, object creation/editing, direct vector-path authoring, transform handles, shared undo/redo, pose/expression authoring, pose keyframing, direct keyframe editing, individual property keying, playback controls, preview loop ranges, pointer-disabled onion skins, SVG import/export and project persistence controls, live project/import transient resets, animation-preview isolation, rig controls, and timeline entry points.
