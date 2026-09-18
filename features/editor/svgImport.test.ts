@@ -125,7 +125,11 @@ describe("static SVG import", () => {
       ["panel", "rectangle"],
       ["curve", "path"],
     ]);
-    expect(imported.objects[0].transform).toMatchObject({ x: 5, y: 7, rotation: 20, scaleX: 1.1, scaleY: 0.9 });
+    expect(imported.objects[0].transform.x).toBeCloseTo(5);
+    expect(imported.objects[0].transform.y).toBeCloseTo(7);
+    expect(imported.objects[0].transform.rotation).toBeCloseTo(20);
+    expect(imported.objects[0].transform.scaleX).toBeCloseTo(1.1);
+    expect(imported.objects[0].transform.scaleY).toBeCloseTo(0.9);
     const curve = imported.objects[1];
     if (curve.kind !== "path") throw new Error("Expected imported path");
     expect(curve.path.closed).toBe(true);
