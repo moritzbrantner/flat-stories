@@ -3,7 +3,6 @@ import {
   type CircleObject,
   type EditorDocument,
   type EditorObject,
-  type GroupObject,
   type PathAnchor,
   type PathObject,
   type RectangleObject,
@@ -465,8 +464,20 @@ function groupObject(element: Element, inherited: Paint, context: Context): Edit
     if (drawable.kind === "group") {
       fail("invalid-svg", locationOf(element), "internal SVG wrapper classification failed");
     }
+    const normalized = drawable.kind === "path"
+      ? {
+          ...drawable,
+          path: {
+            ...drawable.path,
+            anchors: drawable.path.anchors.map((anchor, index) => ({
+              ...anchor,
+              id: base.id + "-anchor-" + (index + 1),
+            })),
+          },
+        }
+      : drawable;
     return {
-      ...drawable,
+      ...normalized,
       ...base,
       id: base.id,
       name: base.name,
