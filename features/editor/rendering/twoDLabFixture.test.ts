@@ -26,8 +26,8 @@ describe("2d-lab Nova fixture exporter", () => {
     });
 
     const serialized = JSON.stringify(snapshot);
-    expect(serialized).not.toContain("animations");
-    expect(serialized).not.toContain("rig");
-    expect(serialized).not.toContain("children");
+    expect(serialized).not.toContain('"animations":');
+    expect(serialized).not.toContain('"rig":');
+    expect(serialized).not.toContain('"children":');
   });
 });
