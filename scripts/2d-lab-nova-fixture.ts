@@ -89,7 +89,7 @@ function renderPaint(object: DrawableObject) {
     fill: object.fill,
     ...(object.stroke ? { stroke: object.stroke } : {}),
     ...(object.strokeWidth !== undefined
-      ? { strokeWidth: positive(object.strokeWidth, object.id, "strokeWidth") }
+      ? { strokeWidth: nonNegative(object.strokeWidth, object.id, "strokeWidth") }
       : {}),
     ...(object.strokeLinecap ? { strokeLinecap: object.strokeLinecap } : {}),
     ...(object.strokeLinejoin ? { strokeLinejoin: object.strokeLinejoin } : {}),
