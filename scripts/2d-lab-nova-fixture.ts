@@ -53,8 +53,8 @@ function renderShape(object: DrawableObject) {
         kind: "rectangle" as const,
         x: finite(object.x, object.id, "x"),
         y: finite(object.y, object.id, "y"),
-        width: positive(object.width, object.id, "width"),
-        height: positive(object.height, object.id, "height"),
+        width: nonNegative(object.width, object.id, "width"),
+        height: nonNegative(object.height, object.id, "height"),
         cornerRadius: nonNegative(object.cornerRadius, object.id, "cornerRadius"),
       };
     case "circle":
@@ -62,7 +62,7 @@ function renderShape(object: DrawableObject) {
         kind: "circle" as const,
         cx: finite(object.cx, object.id, "cx"),
         cy: finite(object.cy, object.id, "cy"),
-        radius: positive(object.radius, object.id, "radius"),
+        radius: nonNegative(object.radius, object.id, "radius"),
       };
     case "path": {
       object.path.anchors.forEach((anchor, index) => {
@@ -120,12 +120,6 @@ function finite(value: number, id: string, field: string) {
 function finitePoint(point: { x: number; y: number }, id: string, field: string) {
   finite(point.x, id, `${field}.x`);
   finite(point.y, id, `${field}.y`);
-}
-
-function positive(value: number, id: string, field: string) {
-  finite(value, id, field);
-  if (value <= 0) throw new Error(`Nova render item ${id} has non-positive ${field}`);
-  return value;
 }
 
 function nonNegative(value: number, id: string, field: string) {
