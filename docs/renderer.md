@@ -59,6 +59,12 @@ The browser stage numbers are deliberately not added together: each stage is mea
 
 The CPU renderer benchmark remains a separate artifact. Ordinary correctness CI does not fail because a shared runner happened to be slower or faster on one run.
 
+## 2d-lab fixture boundary
+
+`bun run fixture:2d-lab` exports the existing one-copy Nova renderer benchmark **after** Flat Stories has resolved hierarchy, rig attachment transforms and inherited opacity into its product-owned render frame. The artifact contains only backend-ready rectangle/circle/SVG-path geometry, affine matrices and paint. It contains no `EditorDocument`, rig, animation, selection or editor state.
+
+The exporter fails closed if the benchmark begins to contain text or invalid render values rather than silently changing semantics. The generated snapshot is intended to be checked into `2d-lab` with source-revision provenance; Flat Stories remains the semantic/reference authority.
+
 ## Ownership
 
 Flat Stories owns character/vector render semantics, the canonical `EditorDocument`, and the adapter from that scene graph to render frames. Generic geometry kernels may move to a shared Rust foundation only after they are reusable independently of Flat Stories. `2d-lab` is a Rust/WASM 2D rendering decision lab: Flat Stories may consume its benchmark findings, backend experiments, or small proven techniques, but must not import the lab's `BenchmarkWorkload` or display-list model as its runtime scene/render contract.
