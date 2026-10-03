@@ -1,11 +1,21 @@
 import { fixtureDocument } from "../features/editor/fixture";
-import type { DrawableObject } from "../features/editor/model";
+import type { DrawableObject, EditorDocument } from "../features/editor/model";
 import { pathToSvg } from "../features/editor/vectorPath";
 import { createRendererBenchmarkDocument } from "../features/editor/rendering/benchmarkFixture";
 import { buildRenderFrame, type RenderMatrix } from "../features/editor/rendering/renderFrame";
 
-export function create2dLabNovaFixture() {
-  const benchmarkDocument = createRendererBenchmarkDocument(fixtureDocument, 1);
+export type TwoDLabNovaFixtureOptions = {
+  /** Exact 40-character Flat Stories commit the snapshot is produced from. */
+  sourceRevision: string;
+  /** Source document; defaults to the canonical Nova fixture. */
+  document?: EditorDocument;
+};
+
+export function create2dLabNovaFixture({ sourceRevision, document = fixtureDocument }: TwoDLabNovaFixtureOptions) {
+  if (!/^[0-9a-f]{40}$/.test(sourceRevision)) {
+    throw new Error(`Nova 2d-lab snapshot needs an exact 40-character source revision, got "${sourceRevision}"`);
+  }
+  const benchmarkDocument = createRendererBenchmarkDocument(document, 1);
   const frame = buildRenderFrame(benchmarkDocument);
 
   const snapshot = {
@@ -14,6 +24,7 @@ export function create2dLabNovaFixture() {
       generatedBy: "scripts/export-2d-lab-nova-fixture.ts",
       sourceFixture: "features/editor/fixture.ts#fixtureDocument",
       sourceRepository: "moritzbrantner/flat-stories",
+      sourceRevision,
       sourceWorkload: "createRendererBenchmarkDocument(fixtureDocument, 1)",
     },
     width: frame.width,
@@ -54,6 +65,11 @@ function renderShape(object: DrawableObject) {
         radius: positive(object.radius, object.id, "radius"),
       };
     case "path": {
+      object.path.anchors.forEach((anchor, index) => {
+        finitePoint(anchor.point, object.id, `anchors[${index}].point`);
+        if (anchor.inHandle) finitePoint(anchor.inHandle, object.id, `anchors[${index}].inHandle`);
+        if (anchor.outHandle) finitePoint(anchor.outHandle, object.id, `anchors[${index}].outHandle`);
+      });
       const path = pathToSvg(object.path);
       if (!path) throw new Error(`Nova path ${object.id} is empty`);
       return {
@@ -101,6 +117,11 @@ function finite(value: number, id: string, field: string) {
   return value;
 }
 
+function finitePoint(point: { x: number; y: number }, id: string, field: string) {
+  finite(point.x, id, `${field}.x`);
+  finite(point.y, id, `${field}.y`);
+}
+
 function positive(value: number, id: string, field: string) {
   finite(value, id, field);
   if (value <= 0) throw new Error(`Nova render item ${id} has non-positive ${field}`);
@@ -112,4 +133,3 @@ function nonNegative(value: number, id: string, field: string) {
   if (value < 0) throw new Error(`Nova render item ${id} has negative ${field}`);
   return value;
 }
-
