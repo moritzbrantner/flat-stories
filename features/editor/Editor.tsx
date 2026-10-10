@@ -212,10 +212,13 @@ export function Editor({ initialDocument }: EditorProps) {
         event.preventDefault();
         undo();
         setSelectedIds([]);
-      } else {
+      } else if (!event.defaultPrevented) {
         const command = (Object.keys(LAYOUT_SHORTCUTS) as LayoutShortcut[]).find((candidate) =>
           matchesEditorHotkey(event, LAYOUT_SHORTCUTS[candidate]));
-        if (command) {
+        // The layer tree owns arrow keys (navigation/selection) while it has focus; running a
+        // layout command there would act on a selection the same keystroke just changed.
+        const fromLayerTree = event.target instanceof Element && event.target.closest('[role="tree"]') !== null;
+        if (command && !(fromLayerTree && LAYOUT_SHORTCUTS[command].includes("Arrow"))) {
           event.preventDefault();
           layoutCommandRef.current(command);
         }
