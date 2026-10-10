@@ -25,6 +25,10 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+// Each equivalence case renders the editor twice and drives it through the UI; under the
+// full parallel suite that can exceed the 5 s default. Timing only, no behavior change.
+vi.setConfig({ testTimeout: 30_000 });
+
 type Selection = "single-caption" | "single-ground" | "pair" | "triple";
 
 type Outcome = { project: string; layers: string[]; selected: string[] };

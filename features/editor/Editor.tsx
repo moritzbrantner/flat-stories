@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { isEditorEditableTarget, matchesEditorHotkey } from "@moenarch/editor-core/hotkeys";
 import { sampleAnimation } from "./animation";
 import { keyframePose, keyframeProperty, removeKeyframeAtTime, removeTrackKeyframe, updateTrackKeyframe } from "./animationAuthoring";
@@ -71,6 +71,33 @@ function rotateVector(point: Point, rotation: number): Point {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   return { x: point.x * cos - point.y * sin, y: point.x * sin + point.y * cos };
+}
+
+
+/** Layer/layout command shortcuts (issue #3); each runs the same command as its button. */
+const LAYOUT_SHORTCUTS = {
+  duplicate: "Mod+D",
+  forward: "Mod+]",
+  backward: "Mod+[",
+  alignLeft: "Alt+Shift+ArrowLeft",
+  alignRight: "Alt+Shift+ArrowRight",
+  alignTop: "Alt+Shift+ArrowUp",
+  alignBottom: "Alt+Shift+ArrowDown",
+  alignCenterX: "Shift+H",
+  alignCenterY: "Shift+V",
+  distributeHorizontal: "Mod+Shift+ArrowRight",
+  distributeVertical: "Mod+Shift+ArrowDown",
+} as const;
+
+type LayoutShortcut = keyof typeof LAYOUT_SHORTCUTS;
+
+/** `aria-keyshortcuts` and title for a button whose command has a layout shortcut. */
+function shortcutProps(command: LayoutShortcut, label: string) {
+  const hotkey = LAYOUT_SHORTCUTS[command];
+  const aria = hotkey.startsWith("Mod+")
+    ? `${hotkey.replace("Mod+", "Control+")} ${hotkey.replace("Mod+", "Meta+")}`
+    : hotkey;
+  return { "aria-keyshortcuts": aria, title: `${label} (${hotkey.replace("Mod+", "Ctrl+")})` };
 }
 
 export function Editor({ initialDocument }: EditorProps) {
@@ -154,6 +181,26 @@ export function Editor({ initialDocument }: EditorProps) {
     setCanvasPreviewFailed(true);
   }, []);
 
+  // Shortcuts call the latest command closures (they guard exactly like the buttons).
+  const layoutCommandRef = useRef<(command: LayoutShortcut) => void>(() => {});
+  useLayoutEffect(() => {
+    layoutCommandRef.current = (command) => {
+    switch (command) {
+      case "duplicate": return duplicateSelection();
+      case "forward": return reorderSelection("forward");
+      case "backward": return reorderSelection("backward");
+      case "alignLeft": return alignSelection("left");
+      case "alignRight": return alignSelection("right");
+      case "alignTop": return alignSelection("top");
+      case "alignBottom": return alignSelection("bottom");
+      case "alignCenterX": return alignSelection("center-x");
+      case "alignCenterY": return alignSelection("center-y");
+      case "distributeHorizontal": return distributeSelection("horizontal");
+      case "distributeVertical": return distributeSelection("vertical");
+    }
+  };
+  });
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (isEditorEditableTarget(event.target)) return;
@@ -165,6 +212,13 @@ export function Editor({ initialDocument }: EditorProps) {
         event.preventDefault();
         undo();
         setSelectedIds([]);
+      } else {
+        const command = (Object.keys(LAYOUT_SHORTCUTS) as LayoutShortcut[]).find((candidate) =>
+          matchesEditorHotkey(event, LAYOUT_SHORTCUTS[candidate]));
+        if (command) {
+          event.preventDefault();
+          layoutCommandRef.current(command);
+        }
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -447,7 +501,7 @@ export function Editor({ initialDocument }: EditorProps) {
       <hr />
       <button type="button" disabled={!canGroup || !editingEnabled} onClick={groupSelection}><span aria-hidden>G</span>Group</button>
       <button type="button" disabled={!canUngroup || !editingEnabled} onClick={ungroupSelection}><span aria-hidden>U</span>Ungroup</button>
-      <button type="button" disabled={!editingEnabled || selectedIds.length === 0} onClick={duplicateSelection}><span aria-hidden>D</span>Duplicate</button>
+      <button type="button" disabled={!editingEnabled || selectedIds.length === 0} onClick={duplicateSelection} {...shortcutProps("duplicate", "Duplicate")}><span aria-hidden>D</span>Duplicate</button>
     </aside>
 
     <section className="canvas-region" aria-label="Canvas workspace"
@@ -531,21 +585,21 @@ export function Editor({ initialDocument }: EditorProps) {
       <section>
         <h2>Arrange</h2>
         <div className="arrange-actions">
-          <button type="button" disabled={!editingEnabled || selectedIds.length === 0} onClick={duplicateSelection}>Duplicate</button>
-          <button type="button" disabled={!editingEnabled || selectedIds.length !== 1} onClick={() => reorderSelection("backward")}>Backward</button>
-          <button type="button" disabled={!editingEnabled || selectedIds.length !== 1} onClick={() => reorderSelection("forward")}>Forward</button>
+          <button type="button" disabled={!editingEnabled || selectedIds.length === 0} onClick={duplicateSelection} {...shortcutProps("duplicate", "Duplicate")}>Duplicate</button>
+          <button type="button" disabled={!editingEnabled || selectedIds.length !== 1} onClick={() => reorderSelection("backward")} {...shortcutProps("backward", "Send backward")}>Backward</button>
+          <button type="button" disabled={!editingEnabled || selectedIds.length !== 1} onClick={() => reorderSelection("forward")} {...shortcutProps("forward", "Bring forward")}>Forward</button>
           <button type="button" disabled={!editingEnabled || selectedIds.length !== 1} onClick={() => reorderSelection("back")}>To back</button>
           <button type="button" disabled={!editingEnabled || selectedIds.length !== 1} onClick={() => reorderSelection("front")}>To front</button>
         </div>
         <div className="arrange-actions compact">
-          <button type="button" disabled={!canArrange} onClick={() => alignSelection("left")}>Align L</button>
-          <button type="button" disabled={!canArrange} onClick={() => alignSelection("center-x")}>Align H</button>
-          <button type="button" disabled={!canArrange} onClick={() => alignSelection("right")}>Align R</button>
-          <button type="button" disabled={!canArrange} onClick={() => alignSelection("top")}>Align T</button>
-          <button type="button" disabled={!canArrange} onClick={() => alignSelection("center-y")}>Align V</button>
-          <button type="button" disabled={!canArrange} onClick={() => alignSelection("bottom")}>Align B</button>
-          <button type="button" disabled={!canArrange || selectedIds.length < 3} onClick={() => distributeSelection("horizontal")}>Dist H</button>
-          <button type="button" disabled={!canArrange || selectedIds.length < 3} onClick={() => distributeSelection("vertical")}>Dist V</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("left")} {...shortcutProps("alignLeft", "Align left")}>Align L</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("center-x")} {...shortcutProps("alignCenterX", "Align horizontal centers")}>Align H</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("right")} {...shortcutProps("alignRight", "Align right")}>Align R</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("top")} {...shortcutProps("alignTop", "Align top")}>Align T</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("center-y")} {...shortcutProps("alignCenterY", "Align vertical centers")}>Align V</button>
+          <button type="button" disabled={!canArrange} onClick={() => alignSelection("bottom")} {...shortcutProps("alignBottom", "Align bottom")}>Align B</button>
+          <button type="button" disabled={!canArrange || selectedIds.length < 3} onClick={() => distributeSelection("horizontal")} {...shortcutProps("distributeHorizontal", "Distribute horizontally")}>Dist H</button>
+          <button type="button" disabled={!canArrange || selectedIds.length < 3} onClick={() => distributeSelection("vertical")} {...shortcutProps("distributeVertical", "Distribute vertically")}>Dist V</button>
         </div>
       </section>
       <section>
