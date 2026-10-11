@@ -15,6 +15,8 @@ import { createObject, type CreatableObjectKind } from "./objectFactory";
 import { getOnionSkinTimes } from "./onionSkin";
 import { OnionSkinControls } from "./OnionSkinControls";
 import { PathEditorOverlay } from "./PathEditorOverlay";
+import { createPenPathObject, createPenSession, penSessionToPath, reducePenSession, type PenEvent, type PenSession } from "./penTool";
+import { PenPreview } from "./PenPreview";
 import { PlaybackControls } from "./PlaybackControls";
 import { applyCharacterPose, applyExpression, captureCharacterPose, captureExpression, upsertExpression, upsertPose } from "./poses";
 import { ProjectControls } from "./ProjectControls";
@@ -59,6 +61,8 @@ type OnionSkinFrame = {
 };
 
 const GRID_STEP = 10;
+const PEN_HOTKEY = "P";
+const PEN_KEYS = new Set(["Enter", "Escape", "Backspace"]);
 const tools: { kind: CreatableObjectKind; label: string }[] = [
   { kind: "rectangle", label: "Rectangle" },
   { kind: "circle", label: "Circle" },
@@ -90,6 +94,17 @@ const LAYOUT_SHORTCUTS = {
 } as const;
 
 type LayoutShortcut = keyof typeof LAYOUT_SHORTCUTS;
+
+/** Scene coordinates of a pointer event on the artboard (same mapping as PathEditorOverlay). */
+function artboardPoint(svg: SVGSVGElement, clientX: number, clientY: number): Point | null {
+  const matrix = svg.getScreenCTM();
+  if (!matrix) return null;
+  const point = svg.createSVGPoint();
+  point.x = clientX;
+  point.y = clientY;
+  const scene = point.matrixTransform(matrix.inverse());
+  return { x: scene.x, y: scene.y };
+}
 
 /** `aria-keyshortcuts` and title for a button whose command has a layout shortcut. */
 function shortcutProps(command: LayoutShortcut, label: string) {
@@ -127,6 +142,10 @@ export function Editor({ initialDocument }: EditorProps) {
   const panStart = useRef<{ pointer: Point; viewport: Point } | null>(null);
   const objectDrag = useRef<DragState | null>(null);
   const idCounter = useRef(0);
+  const [penActive, setPenActive] = useState(false);
+  const [penSession, setPenSession] = useState<PenSession>(createPenSession);
+  const [penPointer, setPenPointer] = useState<Point | null>(null);
+  const penSessionRef = useRef(penSession);
 
   function setDocument(update: DocumentUpdate) {
     commit(update, { id: "edit-document", label: "Edit document" });
@@ -204,6 +223,7 @@ export function Editor({ initialDocument }: EditorProps) {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (isEditorEditableTarget(event.target)) return;
+      if (penKeyRef.current(event)) return;
       if (matchesEditorHotkey(event, "Mod+Shift+z")) {
         event.preventDefault();
         redo();
@@ -228,6 +248,86 @@ export function Editor({ initialDocument }: EditorProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [redo, undo]);
 
+  // Pen tool: the session is the pure penTool state machine; only a finished path is committed.
+  const penEnabled = penActive && editingEnabled;
+
+  function resetPen(session = createPenSession()) {
+    penSessionRef.current = session;
+    setPenSession(session);
+    setPenPointer(null);
+  }
+
+  function togglePen() {
+    if (!editingEnabled && !penActive) return;
+    resetPen();
+    setPenActive((current) => !current);
+  }
+
+  function dispatchPen(event: PenEvent) {
+    const next = reducePenSession(penSessionRef.current, event, { snapStep: snapToGrid ? GRID_STEP : null });
+    if (next === penSessionRef.current) return;
+    if (next.status === "drawing") {
+      penSessionRef.current = next;
+      setPenSession(next);
+      return;
+    }
+    resetPen();
+    if (next.status !== "finished") return;
+    const id = nextId("path");
+    const path = penSessionToPath(next, id);
+    if (!path) return;
+    const object = createPenPathObject(id, path);
+    commit((current) => ({ ...current, objects: [...current.objects, object] }), {
+      id: "add-object",
+      label: "Add path",
+    });
+    setSelectedIds([object.id]);
+  }
+
+  // Leaving editing (animation preview) discards an unfinished pen path.
+  useEffect(() => {
+    if (!editingEnabled && penSessionRef.current.nodes.length > 0) resetPen();
+  }, [editingEnabled]);
+
+  function penPointerEvent(event: ReactPointerEvent<SVGSVGElement>, type: "pointerdown" | "pointermove" | "pointerup") {
+    if (!penEnabled) return;
+    // Capture phase on the artboard: the pen owns the press, so artwork underneath is neither
+    // selected nor dragged.
+    event.stopPropagation();
+    if (type === "pointerdown") {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
+    const point = artboardPoint(event.currentTarget, event.clientX, event.clientY);
+    if (!point) return;
+    if (type === "pointermove") setPenPointer(point);
+    dispatchPen({ type, point });
+  }
+
+  const penKeyRef = useRef<(event: KeyboardEvent) => boolean>(() => false);
+  useLayoutEffect(() => {
+    penKeyRef.current = (event) => {
+      if (matchesEditorHotkey(event, PEN_HOTKEY)) {
+        event.preventDefault();
+        togglePen();
+        return true;
+      }
+      if (!penEnabled || !PEN_KEYS.has(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
+      // Focused controls keep their own Enter/Escape/Backspace behaviour.
+      if (event.target instanceof Element && event.target.closest("button, a[href], [role='button'], [role='tree']")) return false;
+      event.preventDefault();
+      // Escape with nothing drawn leaves the pen tool.
+      if (event.key === "Escape" && penSessionRef.current.nodes.length === 0) {
+        setPenActive(false);
+        resetPen();
+        return true;
+      }
+      dispatchPen({ type: "key", key: event.key as "Enter" | "Escape" | "Backspace" });
+      return true;
+    };
+  });
+
   function loadProject(nextDocument: EditorDocument) {
     resetDocument(browserEditorEngine.prepareDocument(nextDocument));
     setSelectedIds([]);
@@ -239,6 +339,7 @@ export function Editor({ initialDocument }: EditorProps) {
     panStart.current = null;
     objectDrag.current = null;
     idCounter.current = 0;
+    resetPen();
   }
 
   function nextId(prefix: string, existingIds: readonly string[] = []) {
@@ -501,6 +602,8 @@ export function Editor({ initialDocument }: EditorProps) {
     <aside className="toolbar" aria-label="Drawing tools">
       {tools.map((tool) => <button key={tool.kind} type="button" disabled={!editingEnabled} onClick={() => addObject(tool.kind)}>
         <span aria-hidden>{tool.label[0]}</span>{tool.label}</button>)}
+      <button type="button" disabled={!editingEnabled} aria-pressed={penEnabled} aria-keyshortcuts="P" title="Pen (P)"
+        onClick={togglePen}><span aria-hidden>✒</span>Pen</button>
       <hr />
       <button type="button" disabled={!canGroup || !editingEnabled} onClick={groupSelection}><span aria-hidden>G</span>Group</button>
       <button type="button" disabled={!canUngroup || !editingEnabled} onClick={ungroupSelection}><span aria-hidden>U</span>Ungroup</button>
@@ -533,9 +636,13 @@ export function Editor({ initialDocument }: EditorProps) {
         onSelectionChange={handlePreviewSelection}
         onBackendChange={handlePreviewBackendChange}
         onRenderFailure={handlePreviewFailure}
-      /> : <svg className="artboard" aria-label={document.name} width={document.width} height={document.height}
+      /> : <svg className={penEnabled ? "artboard pen-active" : "artboard"} aria-label={document.name} width={document.width} height={document.height}
         viewBox={`0 0 ${document.width} ${document.height}`}
         style={{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})` }}
+        onPointerDownCapture={(event) => penPointerEvent(event, "pointerdown")}
+        onPointerMoveCapture={(event) => penPointerEvent(event, "pointermove")}
+        onPointerUpCapture={(event) => penPointerEvent(event, "pointerup")}
+        onPointerLeave={() => setPenPointer(null)}
         onPointerDown={(event) => { if (event.target === event.currentTarget) setSelectedIds([]); }}>
         {onionSkinFrames.map((frame) => <g key={`${frame.kind}:${frame.time}`} data-onion-skin={frame.kind} data-sample-time={frame.time}
           aria-hidden="true" pointerEvents="none" opacity={frame.kind === "previous" ? 0.18 : 0.12}>
@@ -573,6 +680,7 @@ export function Editor({ initialDocument }: EditorProps) {
           onPathToggleHandles={(pathId, anchorId) => updatePath(pathId, (path) => togglePathHandles(path, anchorId))}
         />)}
         {showRig && displayDocument.rig ? <RigOverlay rig={displayDocument.rig} /> : null}
+        {penEnabled && penSession.nodes.length > 0 ? <PenPreview session={penSession} pointer={penPointer} /> : null}
       </svg>}
     </section>
 
