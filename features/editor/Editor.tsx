@@ -305,6 +305,16 @@ export function Editor({ initialDocument }: EditorProps) {
     dispatchPen({ type, point });
   }
 
+  // A cancelled press (touch gesture, lost capture) never sends pointerup; keep the node as drawn
+  // so later button-less moves cannot keep reshaping it.
+  function releasePenPress() {
+    const session = penSessionRef.current;
+    if (!session.press) return;
+    const next = { ...session, press: null };
+    penSessionRef.current = next;
+    setPenSession(next);
+  }
+
   const penKeyRef = useRef<(event: KeyboardEvent) => boolean>(() => false);
   useLayoutEffect(() => {
     penKeyRef.current = (event) => {
@@ -643,6 +653,8 @@ export function Editor({ initialDocument }: EditorProps) {
         onPointerMoveCapture={(event) => penPointerEvent(event, "pointermove")}
         onPointerUpCapture={(event) => penPointerEvent(event, "pointerup")}
         onPointerLeave={() => setPenPointer(null)}
+        onPointerCancelCapture={releasePenPress}
+        onLostPointerCapture={releasePenPress}
         onPointerDown={(event) => { if (event.target === event.currentTarget) setSelectedIds([]); }}>
         {onionSkinFrames.map((frame) => <g key={`${frame.kind}:${frame.time}`} data-onion-skin={frame.kind} data-sample-time={frame.time}
           aria-hidden="true" pointerEvents="none" opacity={frame.kind === "previous" ? 0.18 : 0.12}>
