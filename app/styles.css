@@ -41,6 +41,10 @@ button:disabled { cursor: not-allowed !important; opacity: .4; }
 .path-handle-line { stroke: #2fb7a8; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
 .path-handle { fill: #111318; stroke: #2fb7a8; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: crosshair; }
 .path-anchor { fill: white; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
+.artboard.pen-active, .artboard.pen-active [data-node-id] { cursor: crosshair; }
+.pen-preview-path { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.pen-preview-rubber-band { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+.pen-close-target { stroke-width: 3; }
 .path-anchor:focus, .resize-handle:focus, .rotation-handle:focus { outline: none; stroke-width: 4; }
 .rig-overlay { pointer-events: none; fill: none; stroke: #ff5ca8; stroke-width: 3; vector-effect: non-scaling-stroke; }
 .rig-overlay circle { fill: #191c23; }
