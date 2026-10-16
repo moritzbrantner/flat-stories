@@ -28,8 +28,8 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.2.21
       - name: Set up Rust renderer toolchain
@@ -39,7 +39,7 @@ jobs:
       - name: Run renderer benchmark
         run: bun run bench:renderer | tee renderer-benchmark.txt
       - name: Publish benchmark artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: renderer-benchmark
           path: renderer-benchmark.txt
