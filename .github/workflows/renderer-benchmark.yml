@@ -2,14 +2,7 @@ name: Renderer Benchmark
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "renderer-wasm/**"
-      - "features/editor/rendering/**"
-      - "features/editor/rig.ts"
-      - "features/editor/model.ts"
-      - "scripts/benchmark-renderers.ts"
-      - "scripts/build-renderer-wasm.sh"
+  workflow_call:
   push:
     branches:
       - main

@@ -10,6 +10,45 @@ permissions:
   contents: read
 
 jobs:
+  validation-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      renderer-benchmark: ${{ steps.scope.outputs.renderer-benchmark }}
+      browser-renderer-benchmark: ${{ steps.scope.outputs.browser-renderer-benchmark }}
+      allow-skipped: ${{ steps.scope.outputs.allow-skipped }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - id: scope
+        shell: python
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          import json
+          import os
+          import re
+          import subprocess
+
+          # GitHub path filters: '*' stays within a segment; '**' crosses segments.
+          def matches(path, pattern):
+              parts = re.split(r"(\*\*/|\*\*|\*|\?)", pattern)
+              expression = "".join({"**/": "(?:.*/)?", "**": ".*", "*": "[^/]*", "?": "[^/]"}.get(part, re.escape(part)) for part in parts)
+              return re.fullmatch(expression, path) is not None
+
+          groups = {'renderer-benchmark': ['renderer-wasm/**', 'features/editor/rendering/**', 'features/editor/rig.ts', 'features/editor/model.ts', 'scripts/benchmark-renderers.ts', 'scripts/build-renderer-wasm.sh'], 'browser-renderer-benchmark': ['app/renderer-lab/**', 'features/editor/rendering/**', 'features/editor/animation.ts', 'features/editor/fixture.ts', 'renderer-wasm/**', 'scripts/run-browser-renderer-benchmark.ts', 'scripts/serve-static-export.ts', 'package.json', 'next.config.ts']}
+          required = {name: False for name in groups}
+          if os.environ["GITHUB_EVENT_NAME"] == "pull_request":
+              paths = subprocess.check_output(["git", "diff", "--name-only", "--no-renames", "-z", os.environ["BASE_SHA"] + "..." + os.environ["HEAD_SHA"]]).decode().split("\0")
+              required = {name: any(matches(path, pattern) for path in paths for pattern in patterns) for name, patterns in groups.items()}
+          skipped = [name for name, enabled in required.items() if not enabled]
+          if os.environ["GITHUB_EVENT_NAME"] != "pull_request":
+              skipped.append("source-validation")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              for name, enabled in required.items():
+                  print(f"{name}={str(enabled).lower()}", file=output)
+              print(f"allow-skipped={json.dumps(skipped)}", file=output)
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -23,3 +62,29 @@ jobs:
         run: bash scripts/codex-environment.sh setup
       - name: Verify canonical gate
         run: bun run check
+
+  source-validation:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/source-validation.yml
+
+  renderer-benchmark:
+    needs: validation-scope
+    if: needs.validation-scope.outputs.renderer-benchmark == 'true'
+    uses: ./.github/workflows/renderer-benchmark.yml
+
+  browser-renderer-benchmark:
+    needs: validation-scope
+    if: needs.validation-scope.outputs.browser-renderer-benchmark == 'true'
+    uses: ./.github/workflows/browser-renderer-benchmark.yml
+
+  merge-ready:
+    name: merge-ready
+    if: always()
+    needs: ["verify", "validation-scope", "source-validation", "renderer-benchmark", "browser-renderer-benchmark"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: moritzbrantner/reusable-workflows/.github/actions/merge-ready@b0f25f241d76af2584dfc9e375084ff5c5cb97da
+        with:
+          needs: ${{ toJSON(needs) }}
+          required: '["verify", "validation-scope", "source-validation", "renderer-benchmark", "browser-renderer-benchmark"]'
+          allow-skipped: ${{ needs.validation-scope.outputs.allow-skipped || '[]' }}
