@@ -2,17 +2,7 @@ name: Browser Renderer Benchmark
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "app/renderer-lab/**"
-      - "features/editor/rendering/**"
-      - "features/editor/animation.ts"
-      - "features/editor/fixture.ts"
-      - "renderer-wasm/**"
-      - "scripts/run-browser-renderer-benchmark.ts"
-      - "scripts/serve-static-export.ts"
-      - "package.json"
-      - "next.config.ts"
+  workflow_call:
   push:
     branches:
       - main
