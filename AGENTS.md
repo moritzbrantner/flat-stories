@@ -16,3 +16,8 @@ Flat Stories is a product-first flat-design vector character editor and animatio
 - Performance work must keep correctness evidence separate from timing evidence. Compare the same deterministic workload, verify semantic parity first, record benchmark results, and avoid brittle wall-clock pass/fail thresholds in ordinary CI.
 - Dogfood renderer work through the original Nova character and the `/renderer-lab` comparison before broadening abstractions. Move genuinely reusable geometry kernels to shared Rust foundations only after the domain boundary is proven.
 - Run `bun run check` before completion; use `bun run verify:source` when shared editor foundations are part of the change. Run `bun run bench:renderer` when changing the optimized render path.
+
+## Shared coding tooling and conventions
+
+- Read the installed `.conventions/index.md` alongside this repository's agent guidance; apply selected `conventions.json` modules without changing the scene-graph/editor authority boundaries above.
+- Use `coding-tooling inspect --target <existing-path> --json` for scoped pointers and `coding-tooling plan --tier fast --json` for the canonical discovered checks. `bun run check` is still the authoritative full repository gate; use `bun run verify:source` when shared editor source revisions are involved.

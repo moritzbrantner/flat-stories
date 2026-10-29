@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "profile": "repository-foundation-v1",
+  "tiers": {
+    "fast": [
+      "lint",
+      "typecheck",
+      "test"
+    ],
+    "full": [
+      "lint",
+      "typecheck",
+      "test",
+      "build"
+    ],
+    "performance": [
+      "benchmark:smoke"
+    ]
+  },
+  "requiredCapabilities": [
+    "lint",
+    "typecheck",
+    "test",
+    "build"
+  ],
+  "optionalCapabilities": [
+    "benchmark:smoke"
+  ],
+  "capabilityCommands": {
+    "flat-stories": {
+      "benchmark:smoke": [
+        "bun",
+        "run",
+        "bench:renderer"
+      ]
+    }
+  },
+  "taskKnowledge": {
+    "schemaVersion": 1,
+    "scopes": [],
+    "completion": {
+      "command": [
+        "bun",
+        "run",
+        "check"
+      ],
+      "source": "package.json"
+    }
+  }
+}
